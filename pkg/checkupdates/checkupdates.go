@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -13,10 +14,10 @@ import (
 */
 
 type checker struct {
-	connected       bool
-	connectionTries int
 	update          []string
 	upgrade         []string
+	connected       bool
+	connectionTries int
 }
 
 type (
@@ -30,9 +31,9 @@ type (
 // NewChecker returns a new checker .....
 func NewChecker(opts ...options) (checker, error) {
 	c := checker{
-		update:          []string{"brew", "update", "-g"},
-		upgrade:         []string{"brew", "outdated", "-g"},
 		connectionTries: 10,
+		update:          []string{"brew", "update", "-g"},
+		upgrade:         []string{"brew", "outdated", "-g", "-v"},
 	}
 
 	for _, opt := range opts {
@@ -100,7 +101,10 @@ func (c checker) Upgradable() (string, error) {
 	if err != nil {
 		err = fmt.Errorf("upgrade cmd %v, %w", c.upgrade, err)
 	}
-	return string(output), err
+	out := string(output)
+	out = strings.TrimSpace(out)
+
+	return out, err
 }
 
 // Upgradeable is the wrapper-function for the Upgradeable-method

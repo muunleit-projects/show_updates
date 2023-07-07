@@ -31,4 +31,6 @@ func TestShowUpdates(t *testing.T) {
 	}
 }
 
-// TestConnectivity
+// func TestNewCheckerInvalidInputs(t *testing.T) {
+// 	t.Parallel()
+// }

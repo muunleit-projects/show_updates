@@ -13,6 +13,8 @@ import (
 	basics
 */
 
+const path = "/opt/homebrew/bin/"
+
 type checker struct {
 	update          []string
 	upgrade         []string
@@ -32,8 +34,8 @@ type (
 func NewChecker(opts ...options) (checker, error) {
 	c := checker{
 		connectionTries: 10,
-		update:          []string{"brew", "update", "-g"},
-		upgrade:         []string{"brew", "outdated", "-g", "-v"},
+		update:          []string{path + "brew", "update", "-g"},
+		upgrade:         []string{path + "brew", "outdated", "-g", "-v"},
 	}
 
 	for _, opt := range opts {
@@ -55,6 +57,9 @@ func WithConnectedTrue() options {
 // WithUpdate sets the command used for updates
 func WithUpdate(cmd ...string) options {
 	return func(c *checker) error {
+		if cmd[0] == "" {
+			return errors.New("empty update command")
+		}
 		c.update = cmd
 		return nil
 	}
@@ -63,6 +68,9 @@ func WithUpdate(cmd ...string) options {
 // WithUpgradeable sets the command to check for upgradable packages
 func WithUpgradeable(cmd ...string) options {
 	return func(c *checker) error {
+		if cmd[0] == "" {
+			return errors.New("empty upgradeable command")
+		}
 		c.upgrade = cmd
 		return nil
 	}
@@ -72,6 +80,9 @@ func WithUpgradeable(cmd ...string) options {
 // connect github
 func WithConnectionTries(t int) options {
 	return func(c *checker) error {
+		if t <= 0 {
+			return errors.New("tries should be bigger then 0")
+		}
 		c.connectionTries = t
 		return nil
 	}

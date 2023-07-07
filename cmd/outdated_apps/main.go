@@ -12,12 +12,12 @@ func main() {
 	var s string
 
 	a := app.New()
-	w := a.NewWindow("brew updates")
+	w := a.NewWindow("outdated Apps")
 	upgrades, err := checkupdates.Upgradable()
 
 	switch {
 	case err != nil:
-		s = fmt.Sprint("Error: ", err.Error())
+		s = fmt.Sprint("Error: \n", err.Error(), "\n", upgrades)
 	case upgrades != "":
 		s = upgrades
 	default:

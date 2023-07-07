@@ -1,7 +1,7 @@
 package main
 
 import (
-	"os"
+	"fmt"
 
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/widget"
@@ -9,14 +9,21 @@ import (
 )
 
 func main() {
-	upgrades, err := checkupdates.Upgradable()
-	if err != nil {
-		os.Exit(1)
-	}
+	var s string
 
 	a := app.New()
 	w := a.NewWindow("brew updates")
-	w.SetContent(widget.NewLabel(upgrades))
+	upgrades, err := checkupdates.Upgradable()
 
+	switch {
+	case err != nil:
+		s = fmt.Sprint("Error: ", err.Error())
+	case upgrades != "":
+		s = upgrades
+	default:
+		s = "no updates"
+	}
+
+	w.SetContent(widget.NewLabel(s))
 	w.ShowAndRun()
 }

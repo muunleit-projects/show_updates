@@ -1,6 +1,6 @@
 # from https://github.com/PerimeterX/go-project-structure template
 vendor/
-.idea/
+idea/
 
 # Binaries for programs and plugins
 *.exe

@@ -101,16 +101,17 @@ func (c checker) Upgradable() (string, error) {
 	}
 
 	update := exec.Command(c.update[0], c.update[1:]...)
-	err := update.Run()
+	output, err := update.CombinedOutput()
 	if err != nil {
-		err = fmt.Errorf("update cmd %v, %w", c.update, err)
+		err = fmt.Errorf("update cmd %v rerturned %v, %w", c.update, output, err)
 		return "", err
 	}
 
 	upgrade := exec.Command(c.upgrade[0], c.upgrade[1:]...)
-	output, err := upgrade.Output()
+	output, err = upgrade.CombinedOutput()
 	if err != nil {
-		err = fmt.Errorf("upgrade cmd %v, %w", c.upgrade, err)
+		err = fmt.Errorf("upgrade cmd %v rerturned %v, %w", c.upgrade, output, err)
+		return "", err
 	}
 	out := string(output)
 	out = strings.TrimSpace(out)

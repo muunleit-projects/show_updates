@@ -33,8 +33,8 @@ type (
 // NewChecker returns a new checker .....
 func NewChecker(opts ...options) (checker, error) {
 	c := checker{
-		connectionTries: 10,
-		update:          []string{path + "brew", "update", "-g"},
+		connectionTries: 100,
+		update:          []string{path + "brew", "update"},
 		upgrade:         []string{path + "brew", "outdated", "-g", "-v"},
 	}
 
@@ -103,14 +103,20 @@ func (c checker) Upgradable() (string, error) {
 	update := exec.Command(c.update[0], c.update[1:]...)
 	output, err := update.CombinedOutput()
 	if err != nil {
-		err = fmt.Errorf("update cmd %v rerturned %v, %w", c.update, output, err)
+		err = fmt.Errorf("update cmd %v rerturned %v, %w",
+			c.update,
+			string(output),
+			err)
 		return "", err
 	}
 
 	upgrade := exec.Command(c.upgrade[0], c.upgrade[1:]...)
 	output, err = upgrade.CombinedOutput()
 	if err != nil {
-		err = fmt.Errorf("upgrade cmd %v rerturned %v, %w", c.upgrade, output, err)
+		err = fmt.Errorf("upgrade cmd %v rerturned %v, %w",
+			c.upgrade,
+			string(output),
+			err)
 		return "", err
 	}
 	out := string(output)

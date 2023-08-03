@@ -33,9 +33,9 @@ type (
 // NewChecker returns a new checker .....
 func NewChecker(opts ...options) (checker, error) {
 	c := checker{
-		connectionTries: 100,
+		connectionTries: 10,
 		update:          []string{path + "brew", "update"},
-		upgrade:         []string{path + "brew", "outdated", "-g", "-v"},
+		upgrade:         []string{path + "brew", "outdated", "-g"},
 	}
 
 	for _, opt := range opts {
@@ -129,18 +129,24 @@ func Upgradable() (string, error) {
 }
 
 // connectivity checks the connect to github
-func (c checker) connectivity() (err error) {
+func (c checker) connectivity() error {
+	var (
+		con net.Conn
+		err error
+	)
 	for i := 0; i < c.connectionTries; i++ {
-		conn, derr := net.Dial("tcp", "github.com:80")
-		err = derr
-		if derr != nil {
+		con, err = net.Dial("tcp", "github.com:80")
+		if err != nil {
 			time.Sleep(time.Second)
 			continue
 		}
-
-		if cerr := conn.Close(); cerr != nil {
-			err = errors.Join(err, cerr)
-		}
+		defer func() error {
+			cError := con.Close()
+			if cError != nil {
+				return errors.Join(cError, err)
+			}
+			return err
+		}()
 		break
 	}
 	return err

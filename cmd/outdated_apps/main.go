@@ -1,60 +1,83 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"os"
 	"os/exec"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 	"github.com/muunleit-projects/show_updates/pkg/checkupdates"
 )
 
+const logfile string = "/tmp/outdated_apps.log"
+
 func main() {
-	const logfile string = "/tmp/outdated_apps.log"
-	var s string
+	var c fyne.CanvasObject
 
 	a := app.New()
 	w := a.NewWindow("outdated Apps")
 	w.Resize(fyne.Size{Width: 200})
-	upgrades, err := checkupdates.Upgradable()
 
+	upgrades, err := checkupdates.Upgradable()
 	switch {
 	case err != nil:
-		wErr := writeError(err)
-		if wErr != nil {
-			s = "Error: " + wErr.Error()
-			break
+		err := logError(err)
+		if err != nil {
+			c = widget.NewLabel("Error: " + err.Error())
 		}
-		s = "Error: look at the logfile: " + logfile
-	case upgrades != "":
-		s = upgrades
+		c = widget.NewLabel("Error: see " + logfile)
+	case len(upgrades) == 0 || upgrades == "":
+		c = widget.NewLabel("no updates")
 	default:
-		s = "no updates"
+		c = container.NewVBox(
+			widget.NewLabel(upgrades),
+			widget.NewButton("open Terminal", openTerminal),
+		)
 	}
 
-	w.SetContent(widget.NewButton(s, func() {
-		exec.Command("open", "/System/Applications/Utilities/Terminal.app").Run()
-		a.Quit()
-	}))
-
+	w.SetContent(c)
 	w.ShowAndRun()
 }
 
-func writeError(err error) error {
-	f, ferr := os.OpenFile("/tmp/outdated_apps.log",
+// func makeUI() fyne.CanvasObject {
+// 	upgrades, err := checkupdates.Upgradable()
+// 	if err != nil {
+// 		err := logError(err)
+// 		if err != nil {
+// 			return widget.NewLabel("Error: " + err.Error())
+// 		}
+// 		return widget.NewLabel("Error: " + logfile)
+// 	}
+// 	if upgrades == "" {
+// 		return widget.NewLabel("no updates")
+// 	}
+// 	return container.NewVBox(
+// 		widget.NewLabel(upgrades),
+// 		widget.NewButton("open Terminal", openTerminal),
+// 	)
+// }
+
+func logError(err error) error {
+	f, fError := os.OpenFile(
+		logfile,
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
 		0o644)
-	if ferr != nil {
-		return ferr
+	if fError != nil {
+		return errors.Join(fError, err)
 	}
 	defer func() {
 		f.Close()
 	}()
 
-	l := log.Default()
-	l.SetOutput(f)
+	l := log.New(f, "", log.LstdFlags)
 	l.Println(err.Error())
 	return nil
+}
+
+func openTerminal() {
+	exec.Command("open", "/System/Applications/Utilities/Terminal.app").Run()
 }

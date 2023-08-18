@@ -16,10 +16,10 @@ import (
 const path = "/opt/homebrew/bin/"
 
 type checker struct {
-	update          []string
-	upgrade         []string
-	connected       bool
-	connectionTries int
+	update            []string
+	upgrade           []string
+	connected         bool
+	connectionTimeout time.Duration
 }
 
 type (
@@ -33,9 +33,9 @@ type (
 // NewChecker returns a new checker .....
 func NewChecker(opts ...options) (checker, error) {
 	c := checker{
-		connectionTries: 10,
-		update:          []string{path + "brew", "update"},
-		upgrade:         []string{path + "brew", "outdated", "-g"},
+		connectionTimeout: time.Second * 30,
+		update:            []string{path + "brew", "update"},
+		upgrade:           []string{path + "brew", "outdated", "-g"},
 	}
 
 	for _, opt := range opts {
@@ -43,6 +43,7 @@ func NewChecker(opts ...options) (checker, error) {
 			return checker{}, err
 		}
 	}
+
 	return c, nil
 }
 
@@ -50,6 +51,7 @@ func NewChecker(opts ...options) (checker, error) {
 func WithConnectedTrue() options {
 	return func(c *checker) error {
 		c.connected = true
+
 		return nil
 	}
 }
@@ -60,7 +62,9 @@ func WithUpdate(cmd ...string) options {
 		if cmd[0] == "" {
 			return errors.New("empty update command")
 		}
+
 		c.update = cmd
+
 		return nil
 	}
 }
@@ -71,19 +75,23 @@ func WithUpgradeable(cmd ...string) options {
 		if cmd[0] == "" {
 			return errors.New("empty upgradeable command")
 		}
+
 		c.upgrade = cmd
+
 		return nil
 	}
 }
 
 // WithConnetionTries sets the count for how often the program should try to
 // connect github
-func WithConnectionTries(t int) options {
+func WithConnectionTimeout(t time.Duration) options {
 	return func(c *checker) error {
 		if t <= 0 {
-			return errors.New("tries should be bigger then 0")
+			return errors.New("timeout should be bigger then 0")
 		}
-		c.connectionTries = t
+
+		c.connectionTimeout = t
+
 		return nil
 	}
 }
@@ -101,6 +109,7 @@ func (c checker) Upgradable() (string, error) {
 	}
 
 	update := exec.Command(c.update[0], c.update[1:]...)
+
 	output, err := update.CombinedOutput()
 	if err != nil {
 		err = fmt.Errorf("update cmd %v rerturned %s, %w", c.update, output, err)
@@ -108,11 +117,13 @@ func (c checker) Upgradable() (string, error) {
 	}
 
 	upgrade := exec.Command(c.upgrade[0], c.upgrade[1:]...)
+
 	output, err = upgrade.CombinedOutput()
 	if err != nil {
 		err = fmt.Errorf("upgrade cmd %v rerturned %s, %w", c.upgrade, output, err)
 		return "", err
 	}
+
 	out := string(output)
 	out = strings.TrimSpace(out)
 
@@ -125,29 +136,32 @@ func Upgradable() (string, error) {
 	if err != nil {
 		panic("internal error")
 	}
+
 	return c.Upgradable()
 }
 
 // connectivity checks the connect to github
 func (c checker) connectivity() error {
 	var (
-		con net.Conn
-		err error
+		con   net.Conn
+		err   error
+		begin = time.Now()
+		dur   time.Duration
 	)
-	for i := 0; i < c.connectionTries; i++ {
+
+	for dur <= c.connectionTimeout {
 		con, err = net.Dial("tcp", "github.com:80")
 		if err != nil {
-			time.Sleep(time.Second)
+			dur = time.Since(begin)
 			continue
 		}
-		defer func() error {
-			cError := con.Close()
-			if cError != nil {
-				return errors.Join(cError, err)
-			}
-			return err
+
+		defer func() {
+			con.Close()
 		}()
+
 		break
 	}
+
 	return err
 }

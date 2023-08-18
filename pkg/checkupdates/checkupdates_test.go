@@ -11,7 +11,7 @@ func TestShowUpdates(t *testing.T) {
 
 	c, err := cu.NewChecker(
 		// cu.WithConnectionTries(4),
-		cu.WithConnectedTrue(),
+		// cu.WithConnectedTrue(),
 		cu.WithUpdate("ls"),
 		cu.WithUpgradeable("cat", "testfiles/three_dogs.txt"),
 	)
@@ -22,10 +22,12 @@ func TestShowUpdates(t *testing.T) {
 	want := "waldi" + "\n" +
 		"bello" + "\n" +
 		"rex"
+
 	got, err := c.Upgradable()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if want != got {
 		t.Errorf("\nwant %v \ngot \n%v", want, got)
 	}

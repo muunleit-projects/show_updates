@@ -63,7 +63,7 @@ func noUpdates(a fyne.App) fyne.CanvasObject {
 
 	go func() {
 		for countdown > 0 {
-			str.Set("no updates found \nwindow closes in " + strconv.Itoa(countdown))
+			str.Set("No updates found. \nWindow closes in " + strconv.Itoa(countdown))
 
 			countdown--
 

@@ -5,10 +5,13 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/widget"
 	"github.com/muunleit-projects/show_updates/pkg/checkupdates"
 )
@@ -37,7 +40,10 @@ func main() {
 
 		w.SetContent(widget.NewLabel("Error: see " + logfile))
 	case len(upgrades) == 0 || upgrades == "":
-		w.SetContent(widget.NewLabel("no updates"))
+		// message "no updates" and close window after some seconds, because I was
+		// tired of closing it every time by hand if there was nothing to do
+		w.SetContent(noUpdates(a))
+
 	default:
 		w.SetContent(container.NewVBox(
 			widget.NewLabel(upgrades),
@@ -46,6 +52,27 @@ func main() {
 	}
 
 	w.ShowAndRun()
+}
+
+// noUpdates messages "no updates" with a countdown and close window after after
+// the countdown went off, because I was tired of closing it every time by hand
+// if there was nothing to do. It needs the fyne.App (a) to do the closing
+func noUpdates(a fyne.App) fyne.CanvasObject {
+	countdown := 15
+	str := binding.NewString()
+
+	go func() {
+		for countdown > 0 {
+			str.Set("no updates found \nwindow closes in " + strconv.Itoa(countdown))
+
+			countdown--
+
+			time.Sleep(time.Second)
+		}
+		a.Quit()
+	}()
+
+	return widget.NewLabelWithData(str)
 }
 
 func logError(err error) error {

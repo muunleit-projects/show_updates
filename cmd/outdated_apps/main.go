@@ -25,7 +25,10 @@ func main() {
 	w.Resize(fyne.Size{Width: 200})
 
 	openTerminal := func() {
-		exec.Command("open", "/System/Applications/Utilities/Terminal.app").Run()
+		exec.Command("osascript",
+			"-e", `tell app "Terminal"`,
+			"-e", `do script "brew upgrade -g"`,
+			"-e", `end tell`).Run()
 		a.Quit()
 	}
 
@@ -47,7 +50,7 @@ func main() {
 	default:
 		w.SetContent(container.NewVBox(
 			widget.NewLabel(upgrades),
-			widget.NewButton("open Terminal", openTerminal),
+			widget.NewButton("start updates in Terminal", openTerminal),
 		))
 	}
 

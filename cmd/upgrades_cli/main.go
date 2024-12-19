@@ -1,16 +1,16 @@
 package main
 
 import (
-	"fmt"
+	"log"
 
-	cu "github.com/muunleit-projects/show_updates/pkg/checkupdates"
+	"github.com/muunleit-projects/show_updates/pkg/checkupdates"
 )
 
 func main() {
-	upgrades, err := cu.Upgradable()
+	upgrades, err := checkupdates.Upgradable()
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalf("Error checking for upgrades: %v", err)
 	}
-	fmt.Println(upgrades)
+
+	log.Printf("Upgradable packages: %v", upgrades)
 }

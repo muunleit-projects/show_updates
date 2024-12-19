@@ -30,7 +30,9 @@ type (
 	Setting up new checkers
 */
 
-// NewChecker returns a new checker .....
+// NewChecker returns a new checker with a default connection timeout of 30 seconds.
+// The default upgrade command is "/opt/homebrew/bin/brew outdated -g".
+// The default update command is "/opt/homebrew/bin/brew update".
 func NewChecker(opts ...options) (checker, error) {
 	c := checker{
 		connectionTimeout: time.Second * 30,
@@ -87,7 +89,7 @@ func WithUpgradeable(cmd ...string) options {
 func WithConnectionTimeout(t time.Duration) options {
 	return func(c *checker) error {
 		if t <= 0 {
-			return errors.New("timeout should be bigger then 0")
+			return errors.New("timeout should be greater than 0")
 		}
 
 		c.connectionTimeout = t
@@ -100,7 +102,7 @@ func WithConnectionTimeout(t time.Duration) options {
 	Methods and Functions
 */
 
-// Upgradable updates the packagelist and returs the upgradeable packages
+// Upgradable updates the packagelist and returns the upgradeable packages
 func (c checker) Upgradable() (string, error) {
 	if !c.connected {
 		if err := c.connectivity(); err != nil {
@@ -112,25 +114,20 @@ func (c checker) Upgradable() (string, error) {
 
 	output, err := update.CombinedOutput()
 	if err != nil {
-		err = fmt.Errorf("update cmd %v rerturned %s, %w", c.update, output, err)
-		return "", err
+		return "", fmt.Errorf("update cmd %v returned %s, %w", c.update, output, err)
 	}
 
 	upgrade := exec.Command(c.upgrade[0], c.upgrade[1:]...)
 
 	output, err = upgrade.CombinedOutput()
 	if err != nil {
-		err = fmt.Errorf("upgrade cmd %v rerturned %s, %w", c.upgrade, output, err)
-		return "", err
+		return "", fmt.Errorf("upgrade cmd %v returned %s, %w", c.upgrade, output, err)
 	}
 
-	out := string(output)
-	out = strings.TrimSpace(out)
-
-	return out, err
+	return strings.TrimSpace(string(output)), nil
 }
 
-// Upgradeable is the wrapper-function for the Upgradeable-method
+// Upgradable is the wrapper-function for the Upgradable-method
 func Upgradable() (string, error) {
 	c, err := NewChecker()
 	if err != nil {
@@ -140,7 +137,7 @@ func Upgradable() (string, error) {
 	return c.Upgradable()
 }
 
-// connectivity checks the connect to github
+// connectivity checks the connection to GitHub
 func (c checker) connectivity() error {
 	var (
 		con   net.Conn
@@ -153,12 +150,12 @@ func (c checker) connectivity() error {
 		con, err = net.Dial("tcp", "github.com:80")
 		if err != nil {
 			dur = time.Since(begin)
+			time.Sleep(time.Second) // Sleep for 1 second before retrying
+
 			continue
 		}
 
-		defer func() {
-			con.Close()
-		}()
+		defer con.Close()
 
 		break
 	}

@@ -31,25 +31,29 @@ type (
 */
 
 // NewChecker returns a new checker with a default connection timeout of 30 seconds.
-// The default upgrade command is "/opt/homebrew/bin/brew outdated -g".
-// The default update command is "/opt/homebrew/bin/brew update".
+// By default the values are
+// update command: "/opt/homebrew/bin/brew update"
+// upgrade command: "/opt/homebrew/bin/brew outdated -g"
+// connection timeout: 30 seconds
+// connection check: enabled
 func NewChecker(opts ...options) (checker, error) {
 	c := checker{
-		connectionTimeout: time.Second * 30,
 		update:            []string{path + "brew", "update"},
 		upgrade:           []string{path + "brew", "outdated", "-g"},
+		connectionTimeout: time.Second * 30,
+		connected:         false,
 	}
 
 	for _, opt := range opts {
 		if err := opt(&c); err != nil {
-			return checker{}, err
+			return checker{}, fmt.Errorf("error in option: %w", err)
 		}
 	}
 
 	return c, nil
 }
 
-// WithConnectedTrue disables connectivity check
+// WithConnectedTrue disables connectivity check (only for testing)
 func WithConnectedTrue() options {
 	return func(c *checker) error {
 		c.connected = true

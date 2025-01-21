@@ -36,8 +36,9 @@ func main() {
 
 	switch {
 	case err != nil:
-		if logErr := logError(err); logErr != nil {
-			w.SetContent(widget.NewLabel("Error: " + logErr.Error()))
+		err := logError(err)
+		if err != nil {
+			w.SetContent(widget.NewLabel("Error: " + err.Error()))
 		}
 
 		w.SetContent(widget.NewLabel("Error: see " + logfile))
@@ -71,7 +72,6 @@ func noUpdates(a fyne.App) fyne.CanvasObject {
 
 			time.Sleep(time.Second)
 		}
-
 		a.Quit()
 	}()
 
@@ -84,7 +84,9 @@ func logError(err error) error {
 		return errors.Join(fError, err)
 	}
 
-	defer f.Close()
+	defer func() {
+		f.Close()
+	}()
 
 	l := log.New(f, "", log.LstdFlags)
 	l.Println(err.Error())

@@ -27,7 +27,7 @@ func TestShowUpgrades(t *testing.T) {
 			desc:            "with homebrew (app needs to be installed)",
 			inputUpdateCmd:  []string{"/opt/homebrew/bin/brew", "update"},
 			inputUpgradeCmd: []string{"/opt/homebrew/bin/brew", "outdated", "-g"},
-			outputExpected:  "",
+			outputExpected:  "vivaldi",
 			errExpected:     nil,
 		},
 	} {

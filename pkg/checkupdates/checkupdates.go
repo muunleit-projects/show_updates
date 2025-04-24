@@ -30,17 +30,23 @@ type (
 	Setting up new checkers
 */
 
-// NewChecker returns a new checker with a default connection timeout of 30 seconds.
-// By default the values are
-// update command: "/opt/homebrew/bin/brew update"
-// upgrade command: "/opt/homebrew/bin/brew outdated -g"
-// connection timeout: 30 seconds
-// connection check: enabled
+const timeoutTime = time.Second * 30
+
+/*
+NewChecker returns a new checker with a default connection timeout of 30 seconds.
+
+By default the values are
+update command: "/opt/homebrew/bin/brew update"
+upgrade command: "/opt/homebrew/bin/brew outdated -g"
+connection timeout: 30 seconds
+connection check: enabled.
+*/
 func NewChecker(opts ...options) (checker, error) {
+	const timeoutTime = 30
 	c := checker{
 		update:            []string{path + "brew", "update"},
 		upgrade:           []string{path + "brew", "outdated", "-g"},
-		connectionTimeout: time.Second * 30,
+		connectionTimeout: timeoutTime,
 		connected:         false,
 	}
 
@@ -53,7 +59,7 @@ func NewChecker(opts ...options) (checker, error) {
 	return c, nil
 }
 
-// WithConnectedTrue disables connectivity check (only for testing)
+/* WithConnectedTrue disables connectivity check (only for testing). */
 func WithConnectedTrue() options {
 	return func(c *checker) error {
 		c.connected = true
@@ -62,7 +68,7 @@ func WithConnectedTrue() options {
 	}
 }
 
-// WithUpdate sets the command used for updates
+/* WithUpdate sets the command used for updates. */
 func WithUpdate(cmd ...string) options {
 	return func(c *checker) error {
 		if cmd[0] == "" {
@@ -75,7 +81,7 @@ func WithUpdate(cmd ...string) options {
 	}
 }
 
-// WithUpgradeable sets the command to check for upgradable packages
+/* WithUpgradeable sets the command to check for upgradable packages. */
 func WithUpgradeable(cmd ...string) options {
 	return func(c *checker) error {
 		if cmd[0] == "" {
@@ -88,8 +94,7 @@ func WithUpgradeable(cmd ...string) options {
 	}
 }
 
-// WithConnetionTries sets the count for how often the program should try to
-// connect github
+/* WithConnetionTries sets the count for how often the program should try to connect github. */
 func WithConnectionTimeout(t time.Duration) options {
 	return func(c *checker) error {
 		if t <= 0 {
@@ -106,7 +111,7 @@ func WithConnectionTimeout(t time.Duration) options {
 	Methods and Functions
 */
 
-// Upgradable updates the packagelist and returns the upgradeable packages
+/* Upgradable updates the packagelist and returns the upgradeable packages. */
 func (c checker) Upgradable() (string, error) {
 	if !c.connected {
 		if err := c.connectivity(); err != nil {
@@ -131,7 +136,7 @@ func (c checker) Upgradable() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// Upgradable is the wrapper-function for the Upgradable-method
+/* Upgradable is the wrapper-function for the Upgradable-method. */
 func Upgradable() (string, error) {
 	c, err := NewChecker()
 	if err != nil {
@@ -141,7 +146,7 @@ func Upgradable() (string, error) {
 	return c.Upgradable()
 }
 
-// connectivity checks the connection to GitHub
+/* connectivity checks the connection to GitHub. */
 func (c checker) connectivity() error {
 	var (
 		con   net.Conn

@@ -16,13 +16,16 @@ import (
 	"github.com/muunleit-projects/show_updates/pkg/checkupdates"
 )
 
-const logfile string = "/tmp/outdated_apps.log"
+const (
+	logfile       string = "/tmp/outdated_apps.log"
+	minfieldwidth int    = 200
+)
 
 func main() {
 	a := app.New()
 	w := a.NewWindow("outdated Apps")
 
-	w.Resize(fyne.Size{Width: 200})
+	w.Resize(fyne.Size{Width: float32(minfieldwidth)})
 
 	openTerminal := func() {
 		exec.Command("osascript",
@@ -43,8 +46,8 @@ func main() {
 
 		w.SetContent(widget.NewLabel("Error: see " + logfile))
 	case len(upgrades) == 0 || upgrades == "":
-		// message "no updates" and close window after some seconds, because I was
-		// tired of closing it every time by hand if there was nothing to do
+		/* message "no updates" and close window after some seconds, because I was
+		tired of closing it every time by hand if there was nothing to do */
 		w.SetContent(noUpdates(a))
 
 	default:
@@ -57,9 +60,11 @@ func main() {
 	w.ShowAndRun()
 }
 
-// noUpdates messages "no updates" with a countdown and close window after after
-// the countdown went off, because I was tired of closing it every time by hand
-// if there was nothing to do. It needs the fyne.App (a) to do the closing
+/*
+noUpdates messages "no updates" with a countdown and close window after the
+countdown went off, because I was tired of closing it every time by hand if
+there  was nothing to do. It needs the fyne.App (a) to do the closing.
+*/
 func noUpdates(a fyne.App) fyne.CanvasObject {
 	countdown := 15
 	str := binding.NewString()
@@ -72,6 +77,7 @@ func noUpdates(a fyne.App) fyne.CanvasObject {
 
 			time.Sleep(time.Second)
 		}
+
 		a.Quit()
 	}()
 

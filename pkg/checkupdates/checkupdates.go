@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -13,7 +14,7 @@ import (
 	basics
 */
 
-const path = "/opt/homebrew/bin/"
+
 
 type checker struct {
 	update            []string
@@ -42,10 +43,26 @@ connection timeout: 30 seconds
 connection check: enabled.
 */
 func NewChecker(opts ...options) (checker, error) {
-	const timeoutTime = 30
+	brewPath, err := exec.LookPath("brew")
+	if err != nil {
+		// check common paths since PATH might be limited in GUI apps
+		commonPaths := []string{"/opt/homebrew/bin/brew", "/usr/local/bin/brew"}
+		found := false
+		for _, p := range commonPaths {
+			if _, e := os.Stat(p); e == nil {
+				brewPath = p
+				found = true
+				break
+			}
+		}
+		if !found {
+			return checker{}, fmt.Errorf("brew not found in PATH or standard locations")
+		}
+	}
+
 	c := checker{
-		update:            []string{path + "brew", "update"},
-		upgrade:           []string{path + "brew", "outdated", "-g"},
+		update:            []string{brewPath, "update"},
+		upgrade:           []string{brewPath, "outdated", "-g"},
 		connectionTimeout: timeoutTime,
 		connected:         false,
 	}

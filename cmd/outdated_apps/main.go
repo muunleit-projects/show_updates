@@ -29,33 +29,39 @@ func main() {
 
 	openTerminal := func() {
 		exec.Command("osascript",
-			"-e", `tell app "Terminal"`,
+			"-e", `tell application "Terminal"`,
+			"-e", `activate`,
 			"-e", `do script "brew upgrade -g"`,
 			"-e", `end tell`).Run()
 		a.Quit()
 	}
 
-	upgrades, err := checkupdates.Upgradable()
+	// Initial UI
+	w.SetContent(widget.NewLabel("Checking for updates..."))
 
-	switch {
-	case err != nil:
-		err := logError(err)
-		if err != nil {
-			w.SetContent(widget.NewLabel("Error: " + err.Error()))
+	go func() {
+		upgrades, err := checkupdates.Upgradable()
+
+		switch {
+		case err != nil:
+			err := logError(err)
+			if err != nil {
+				w.SetContent(widget.NewLabel("Error: " + err.Error()))
+			} else {
+				w.SetContent(widget.NewLabel("Error: see " + logfile))
+			}
+		case len(upgrades) == 0 || upgrades == "":
+			/* message "no updates" and close window after some seconds */
+			w.SetContent(noUpdates(a))
+
+		default:
+			w.SetContent(container.NewVBox(
+				widget.NewLabel(upgrades),
+				widget.NewButton("start updates in Terminal", openTerminal),
+			))
 		}
+	}()
 
-		w.SetContent(widget.NewLabel("Error: see " + logfile))
-	case len(upgrades) == 0 || upgrades == "":
-		/* message "no updates" and close window after some seconds, because I was
-		tired of closing it every time by hand if there was nothing to do */
-		w.SetContent(noUpdates(a))
-
-	default:
-		w.SetContent(container.NewVBox(
-			widget.NewLabel(upgrades),
-			widget.NewButton("start updates in Terminal", openTerminal),
-		))
-	}
 
 	w.ShowAndRun()
 }

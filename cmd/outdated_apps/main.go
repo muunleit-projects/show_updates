@@ -31,7 +31,7 @@ func main() {
 		exec.Command("osascript",
 			"-e", `tell application "Terminal"`,
 			"-e", `activate`,
-			"-e", `do script "brew upgrade -g"`,
+			"-e", `do script "brew upgrade -g -y"`,
 			"-e", `end tell`).Run()
 		a.Quit()
 	}
@@ -61,7 +61,6 @@ func main() {
 			))
 		}
 	}()
-
 
 	w.ShowAndRun()
 }

@@ -54,11 +54,13 @@ A lightweight macOS helper utility that checks for Homebrew updates and provides
 ### Running in Development
 
 To run the GUI utility:
+
 ```bash
 go run ./cmd/outdated_apps
 ```
 
 To run the CLI utility:
+
 ```bash
 go run ./cmd/upgrades_cli
 ```
@@ -68,13 +70,14 @@ go run ./cmd/upgrades_cli
 The GUI app is best packaged as a native macOS `.app` bundle using Fyne's packaging tool:
 
 1. Install the Fyne packaging tool if you haven't:
+
    ```bash
    go install fyne.io/fyne/v2/cmd/fyne@latest
    ```
 
 2. Package the app:
    ```bash
-   fyne package -appID com.muunleit.showupdates -icon cmd/outdated_apps/Icon.png
+   fyne package -appID=com.muunleit.showupdates -appVersion=$(date +"%Y.%m.%d")
    ```
    This will generate a `show_updates.app` bundle in your current directory, which you can move to your `/Applications` folder or set up to run automatically at login.
 

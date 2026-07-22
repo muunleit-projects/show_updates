@@ -23,13 +23,6 @@ func TestShowUpgrades(t *testing.T) {
 			outputExpected:  "waldi\nbello\nrex",
 			errExpected:     nil,
 		},
-		{
-			desc:            "with homebrew (app needs to be installed)",
-			inputUpdateCmd:  []string{"/opt/homebrew/bin/brew", "update"},
-			inputUpgradeCmd: []string{"/opt/homebrew/bin/brew", "outdated", "-g"},
-			outputExpected:  "vivaldi",
-			errExpected:     nil,
-		},
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
 			c, err := checkupdates.NewChecker(

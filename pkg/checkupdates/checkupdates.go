@@ -111,7 +111,7 @@ func WithUpgradeable(cmd ...string) options {
 	}
 }
 
-/* WithConnetionTries sets the count for how often the program should try to connect github. */
+/* WithConnectionTimeout sets the timeout for how long the program should try to connect to GitHub. */
 func WithConnectionTimeout(t time.Duration) options {
 	return func(c *checker) error {
 		if t <= 0 {
@@ -157,7 +157,7 @@ func (c checker) Upgradable() (string, error) {
 func Upgradable() (string, error) {
 	c, err := NewChecker()
 	if err != nil {
-		panic("internal error")
+		return "", err
 	}
 
 	return c.Upgradable()
@@ -173,7 +173,17 @@ func (c checker) connectivity() error {
 	)
 
 	for dur <= c.connectionTimeout {
-		con, err = net.Dial("tcp", "github.com:80")
+		remaining := c.connectionTimeout - dur
+		if remaining <= 0 {
+			break
+		}
+
+		dialTimeout := remaining
+		if dialTimeout > 5*time.Second {
+			dialTimeout = 5 * time.Second
+		}
+
+		con, err = net.DialTimeout("tcp", "github.com:80", dialTimeout)
 		if err != nil {
 			dur = time.Since(begin)
 			time.Sleep(time.Second) // Sleep for 1 second before retrying
@@ -181,10 +191,12 @@ func (c checker) connectivity() error {
 			continue
 		}
 
-		defer con.Close()
-
-		break
+		con.Close()
+		return nil
 	}
 
+	if err == nil {
+		return fmt.Errorf("connection check timed out")
+	}
 	return err
 }

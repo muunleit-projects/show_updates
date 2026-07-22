@@ -33,6 +33,54 @@ func TestShowUpdates(t *testing.T) {
 	}
 }
 
-// func TestNewCheckerInvalidInputs(t *testing.T) {
-// 	t.Parallel()
-// }
+func TestNewCheckerInvalidInputs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("invalid update command", func(t *testing.T) {
+		_, err := cu.NewChecker(cu.WithUpdate(""))
+		if err == nil {
+			t.Error("expected error for empty update command, got nil")
+		}
+	})
+
+	t.Run("invalid upgradeable command", func(t *testing.T) {
+		_, err := cu.NewChecker(cu.WithUpgradeable(""))
+		if err == nil {
+			t.Error("expected error for empty upgradeable command, got nil")
+		}
+	})
+
+	t.Run("invalid connection timeout", func(t *testing.T) {
+		_, err := cu.NewChecker(cu.WithConnectionTimeout(-1))
+		if err == nil {
+			t.Error("expected error for negative connection timeout, got nil")
+		}
+	})
+}
+
+func TestNewCheckerDefaults(t *testing.T) {
+	t.Parallel()
+
+	_, err := cu.NewChecker(cu.WithConnectedTrue())
+	if err != nil {
+		t.Fatalf("unexpected error creating default checker: %v", err)
+	}
+
+	// Verify it executes successfully with overridden commands (so we don't call real brew update)
+	c2, err := cu.NewChecker(
+		cu.WithConnectedTrue(),
+		cu.WithUpdate("echo", "mock_update"),
+		cu.WithUpgradeable("echo", "mock_upgrade"),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out, err := c2.Upgradable()
+	if err != nil {
+		t.Fatalf("unexpected error on Upgradable: %v", err)
+	}
+	if out != "mock_upgrade" {
+		t.Errorf("expected mock_upgrade, got %q", out)
+	}
+}

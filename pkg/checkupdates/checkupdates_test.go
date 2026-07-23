@@ -10,8 +10,7 @@ func TestShowUpdates(t *testing.T) {
 	t.Parallel()
 
 	c, err := cu.NewChecker(
-		// cu.WithConnectionTries(4),
-		// cu.WithConnectedTrue(),
+		cu.WithConnectedTrue(),
 		cu.WithUpdate("ls"),
 		cu.WithUpgradeable("cat", "testfiles/three_dogs.txt"),
 	)

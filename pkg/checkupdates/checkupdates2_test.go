@@ -26,6 +26,7 @@ func TestShowUpgrades(t *testing.T) {
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
 			c, err := checkupdates.NewChecker(
+				checkupdates.WithConnectedTrue(),
 				checkupdates.WithUpdate(tt.inputUpdateCmd...),
 				checkupdates.WithUpgradeable(tt.inputUpgradeCmd...),
 			)
@@ -35,7 +36,6 @@ func TestShowUpgrades(t *testing.T) {
 			}
 
 			upgrades, err := c.Upgradable()
-
 			if got, want := err, tt.errExpected; got != want {
 				t.Fatalf("err=%v, want=%v", got, want)
 			}

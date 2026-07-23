@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -18,14 +19,14 @@ import (
 
 const (
 	logfile       string = "/tmp/outdated_apps.log"
-	minfieldwidth int    = 200
+	minfieldwidth int    = 240
 )
 
 func main() {
 	a := app.New()
-	w := a.NewWindow("outdated Apps")
+	w := a.NewWindow("Outdated Apps")
 
-	w.Resize(fyne.Size{Width: float32(minfieldwidth)})
+	w.Resize(fyne.NewSize(float32(minfieldwidth), 320))
 
 	openTerminal := func() {
 		exec.Command("osascript",
@@ -36,28 +37,54 @@ func main() {
 		a.Quit()
 	}
 
-	// Initial UI
-	w.SetContent(widget.NewLabel("Checking for updates..."))
+	loadingTitle := widget.NewLabelWithStyle("Checking for updates…", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	loadingStatus := widget.NewLabelWithStyle("Refreshing Homebrew package info", fyne.TextAlignCenter, fyne.TextStyle{})
+	loadingHint := widget.NewLabelWithStyle("This may take a moment while Homebrew checks for updates.", fyne.TextAlignCenter, fyne.TextStyle{})
+	loadingDots := widget.NewLabel("•")
+	loadingDots.TextStyle = fyne.TextStyle{Bold: true}
+	loadingDots.Alignment = fyne.TextAlignCenter
+
+	w.SetContent(container.NewCenter(container.NewVBox(loadingTitle, loadingStatus, loadingHint, loadingDots)))
+
+	go func() {
+		frames := []string{"•", "••", "•••"}
+		for {
+			for _, frame := range frames {
+				loadingDots.SetText(frame)
+				time.Sleep(400 * time.Millisecond)
+			}
+		}
+	}()
 
 	go func() {
 		upgrades, err := checkupdates.Upgradable()
 
 		switch {
 		case err != nil:
-			err := logError(err)
-			if err != nil {
-				w.SetContent(widget.NewLabel("Error: " + err.Error()))
-			} else {
-				w.SetContent(widget.NewLabel("Error: see " + logfile))
-			}
+			logErr := logError(err)
+			message := buildErrorMessage(logErr, logfile)
+			w.SetContent(container.NewCenter(container.NewVBox(
+				widget.NewLabelWithStyle("Update check failed", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+				widget.NewLabel(message),
+				widget.NewButton("Quit", func() { a.Quit() }),
+			)))
 		case len(upgrades) == 0 || upgrades == "":
-			/* message "no updates" and close window after some seconds */
 			w.SetContent(noUpdates(a))
 
 		default:
-			w.SetContent(container.NewVBox(
-				widget.NewLabel(upgrades),
-				widget.NewButton("start updates in Terminal", openTerminal),
+			upgradesLabel := widget.NewLabel(upgrades)
+			upgradesLabel.Wrapping = fyne.TextWrapWord
+			upgradesLabel.Alignment = fyne.TextAlignCenter
+
+			w.SetContent(container.NewBorder(
+				widget.NewLabelWithStyle("Updates available", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+				container.NewVBox(
+					widget.NewButton("Open Terminal and Upgrade", openTerminal),
+					widget.NewButton("Quit", func() { a.Quit() }),
+				),
+				nil,
+				nil,
+				container.NewVScroll(upgradesLabel),
 			))
 		}
 	}()
@@ -76,17 +103,30 @@ func noUpdates(a fyne.App) fyne.CanvasObject {
 
 	go func() {
 		for countdown > 0 {
-			str.Set("No updates found. \nWindow closes in " + strconv.Itoa(countdown))
-
+			str.Set(formatNoUpdatesMessage(countdown))
 			countdown--
-
 			time.Sleep(time.Second)
 		}
 
 		a.Quit()
 	}()
 
-	return widget.NewLabelWithData(str)
+	return container.NewCenter(container.NewVBox(
+		widget.NewLabelWithStyle("All up to date", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithData(str),
+		widget.NewButton("Close Now", func() { a.Quit() }),
+	))
+}
+
+func buildErrorMessage(err error, logfilePath string) string {
+	if err == nil {
+		return fmt.Sprintf("Error: see %s", logfilePath)
+	}
+	return fmt.Sprintf("Error: %s", err.Error())
+}
+
+func formatNoUpdatesMessage(countdown int) string {
+	return "No updates found.\nWindow closes in " + strconv.Itoa(countdown)
 }
 
 func logError(err error) error {

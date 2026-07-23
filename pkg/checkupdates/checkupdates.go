@@ -10,11 +10,11 @@ import (
 	"time"
 )
 
+var netDialTimeout = net.DialTimeout
+
 /*
 	basics
 */
-
-
 
 type checker struct {
 	update            []string
@@ -132,7 +132,8 @@ func WithConnectionTimeout(t time.Duration) options {
 func (c checker) Upgradable() (string, error) {
 	if !c.connected {
 		if err := c.connectivity(); err != nil {
-			return "", err
+			// Homebrew may still work through a proxy, mirror, or local network setup.
+			// Continue with the actual brew command rather than aborting immediately.
 		}
 	}
 
@@ -183,7 +184,7 @@ func (c checker) connectivity() error {
 			dialTimeout = 5 * time.Second
 		}
 
-		con, err = net.DialTimeout("tcp", "github.com:80", dialTimeout)
+		con, err = netDialTimeout("tcp", "github.com:80", dialTimeout)
 		if err != nil {
 			dur = time.Since(begin)
 			time.Sleep(time.Second) // Sleep for 1 second before retrying

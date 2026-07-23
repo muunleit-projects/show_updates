@@ -31,7 +31,10 @@ type (
 	Setting up new checkers
 */
 
-const timeoutTime = time.Second * 30
+const (
+	timeoutTime = time.Second * 30
+	maxDialTime = 5 * time.Second
+)
 
 /*
 NewChecker returns a new checker with a default connection timeout of 30 seconds.
@@ -52,6 +55,7 @@ func NewChecker(opts ...options) (checker, error) {
 			if _, e := os.Stat(p); e == nil {
 				brewPath = p
 				found = true
+
 				break
 			}
 		}
@@ -76,7 +80,7 @@ func NewChecker(opts ...options) (checker, error) {
 	return c, nil
 }
 
-/* WithConnectedTrue disables connectivity check (only for testing). */
+// WithConnectedTrue disables the connectivity check, primarily for tests.
 func WithConnectedTrue() options {
 	return func(c *checker) error {
 		c.connected = true
@@ -85,7 +89,7 @@ func WithConnectedTrue() options {
 	}
 }
 
-/* WithUpdate sets the command used for updates. */
+// WithUpdate sets the command used for the update step.
 func WithUpdate(cmd ...string) options {
 	return func(c *checker) error {
 		if cmd[0] == "" {
@@ -98,7 +102,7 @@ func WithUpdate(cmd ...string) options {
 	}
 }
 
-/* WithUpgradeable sets the command to check for upgradable packages. */
+// WithUpgradeable sets the command used to detect upgradable packages.
 func WithUpgradeable(cmd ...string) options {
 	return func(c *checker) error {
 		if cmd[0] == "" {
@@ -111,7 +115,7 @@ func WithUpgradeable(cmd ...string) options {
 	}
 }
 
-/* WithConnectionTimeout sets the timeout for how long the program should try to connect to GitHub. */
+// WithConnectionTimeout sets the maximum time the checker should spend probing GitHub.
 func WithConnectionTimeout(t time.Duration) options {
 	return func(c *checker) error {
 		if t <= 0 {
@@ -128,7 +132,7 @@ func WithConnectionTimeout(t time.Duration) options {
 	Methods and Functions
 */
 
-/* Upgradable updates the packagelist and returns the upgradeable packages. */
+// Upgradable refreshes the package list and returns the upgradable packages.
 func (c checker) Upgradable() (string, error) {
 	if !c.connected {
 		if err := c.connectivity(); err != nil {
@@ -154,7 +158,7 @@ func (c checker) Upgradable() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-/* Upgradable is the wrapper-function for the Upgradable-method. */
+// Upgradable is the wrapper-function for the Upgradable-method.
 func Upgradable() (string, error) {
 	c, err := NewChecker()
 	if err != nil {
@@ -180,8 +184,8 @@ func (c checker) connectivity() error {
 		}
 
 		dialTimeout := remaining
-		if dialTimeout > 5*time.Second {
-			dialTimeout = 5 * time.Second
+		if dialTimeout > maxDialTime {
+			dialTimeout = maxDialTime
 		}
 
 		con, err = netDialTimeout("tcp", "github.com:80", dialTimeout)
@@ -191,13 +195,14 @@ func (c checker) connectivity() error {
 
 			continue
 		}
-
 		con.Close()
+
 		return nil
 	}
 
 	if err == nil {
 		return fmt.Errorf("connection check timed out")
 	}
+
 	return err
 }

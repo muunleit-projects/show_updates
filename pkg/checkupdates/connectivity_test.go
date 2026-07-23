@@ -1,24 +1,21 @@
-package checkupdates
+package checkupdates_test
 
 import (
 	"errors"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/muunleit-projects/show_updates/pkg/checkupdates"
 )
 
 func TestUpgradableProceedsWhenConnectivityCheckFails(t *testing.T) {
-	oldDial := netDialTimeout
-	netDialTimeout = func(network, address string, timeout time.Duration) (net.Conn, error) {
-		return nil, errors.New("probe failed")
-	}
-	t.Cleanup(func() {
-		netDialTimeout = oldDial
-	})
-
-	c, err := NewChecker(
-		WithUpdate("echo", "update"),
-		WithUpgradeable("echo", "upgrade"),
+	c, err := checkupdates.NewChecker(
+		checkupdates.WithDialTimeoutFunc(func(network, address string, timeout time.Duration) (net.Conn, error) {
+			return nil, errors.New("probe failed")
+		}),
+		checkupdates.WithUpdate("echo", "update"),
+		checkupdates.WithUpgradeable("echo", "upgrade"),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error creating checker: %v", err)

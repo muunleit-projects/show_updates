@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-var netDialTimeout = net.DialTimeout
-
 /*
 	basics
 */
@@ -21,6 +19,7 @@ type checker struct {
 	upgrade           []string
 	connected         bool
 	connectionTimeout time.Duration
+	dialTimeout       func(network, address string, timeout time.Duration) (net.Conn, error)
 }
 
 type (
@@ -69,6 +68,7 @@ func NewChecker(opts ...options) (checker, error) {
 		upgrade:           []string{brewPath, "outdated", "-g"},
 		connectionTimeout: timeoutTime,
 		connected:         false,
+		dialTimeout:       net.DialTimeout,
 	}
 
 	for _, opt := range opts {
@@ -123,6 +123,19 @@ func WithConnectionTimeout(t time.Duration) options {
 		}
 
 		c.connectionTimeout = t
+
+		return nil
+	}
+}
+
+// WithDialTimeoutFunc overrides the dialer used for connectivity probes.
+func WithDialTimeoutFunc(dial func(network, address string, timeout time.Duration) (net.Conn, error)) options {
+	return func(c *checker) error {
+		if dial == nil {
+			return errors.New("dial function should not be nil")
+		}
+
+		c.dialTimeout = dial
 
 		return nil
 	}
@@ -188,7 +201,7 @@ func (c checker) connectivity() error {
 			dialTimeout = maxDialTime
 		}
 
-		con, err = netDialTimeout("tcp", "github.com:80", dialTimeout)
+		con, err = c.dialTimeout("tcp", "github.com:80", dialTimeout)
 		if err != nil {
 			dur = time.Since(begin)
 			time.Sleep(time.Second) // Sleep for 1 second before retrying

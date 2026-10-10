@@ -2,6 +2,7 @@ package checkupdates
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -20,6 +21,7 @@ type checker struct {
 	upgrade           []string
 	connected         bool
 	connectionTimeout time.Duration
+	commandTimeout    time.Duration
 	dialTimeout       func(network, address string, timeout time.Duration) (net.Conn, error)
 }
 
@@ -38,6 +40,15 @@ const (
 
 	// probeAddress is the host Homebrew talks to (over HTTPS).
 	probeAddress = "github.com:443"
+
+	// defaultCommandTimeout bounds each brew command. `brew update` can take
+	// a few minutes on a slow connection, but should never hang forever
+	// (e.g. on a stale lock or a stuck network connection).
+	defaultCommandTimeout = 10 * time.Minute
+
+	// waitDelay is how long to wait for output pipes to close after a
+	// command was killed, since brew may leave child processes behind.
+	waitDelay = 5 * time.Second
 )
 
 // ErrBrewNotFound is returned when no brew executable can be located and no
@@ -55,6 +66,7 @@ By default the values are
 update command: "<brew> update"
 upgrade command: "<brew> outdated -g"
 connection timeout: 3 seconds
+command timeout: 10 minutes per command
 connection check: enabled.
 
 The brew executable is only looked up if at least one of the commands was not
@@ -63,6 +75,7 @@ set via WithUpdate or WithUpgradeable.
 func NewChecker(opts ...options) (checker, error) {
 	c := checker{
 		connectionTimeout: timeoutTime,
+		commandTimeout:    defaultCommandTimeout,
 		connected:         false,
 		dialTimeout:       net.DialTimeout,
 	}
@@ -163,6 +176,20 @@ func WithConnectionTimeout(t time.Duration) options {
 	}
 }
 
+// WithCommandTimeout sets the maximum run time of each command (update and
+// upgradeable check). The command is killed when the timeout is exceeded.
+func WithCommandTimeout(t time.Duration) options {
+	return func(c *checker) error {
+		if t <= 0 {
+			return errors.New("command timeout should be greater than 0")
+		}
+
+		c.commandTimeout = t
+
+		return nil
+	}
+}
+
 // WithDialTimeoutFunc overrides the dialer used for connectivity probes.
 func WithDialTimeoutFunc(dial func(network, address string, timeout time.Duration) (net.Conn, error)) options {
 	return func(c *checker) error {
@@ -186,16 +213,22 @@ Upgradable refreshes the package list and returns the upgradable packages.
 A failed connectivity probe does not abort the check, because Homebrew may
 still work through a proxy, mirror or local network setup. If the update step
 fails afterwards, the probe error is attached to make the cause easier to spot.
+
+Each command is killed after the command timeout (see WithCommandTimeout).
 */
 func (c checker) Upgradable() (string, error) {
+	return c.UpgradableContext(context.Background())
+}
+
+// UpgradableContext is like Upgradable, but stops the running command when
+// ctx is cancelled.
+func (c checker) UpgradableContext(ctx context.Context) (string, error) {
 	var connErr error
 	if !c.connected {
 		connErr = c.connectivity()
 	}
 
-	update := exec.Command(c.update[0], c.update[1:]...)
-
-	output, err := update.CombinedOutput()
+	output, err := c.run(ctx, c.update, nil)
 	if err != nil {
 		err = fmt.Errorf("update cmd %v returned %s: %w", c.update, bytes.TrimSpace(output), err)
 		if connErr != nil {
@@ -208,15 +241,53 @@ func (c checker) Upgradable() (string, error) {
 	// Only stdout holds the package list; stderr may carry brew warnings.
 	var stderr bytes.Buffer
 
-	upgrade := exec.Command(c.upgrade[0], c.upgrade[1:]...)
-	upgrade.Stderr = &stderr
-
-	output, err = upgrade.Output()
+	output, err = c.run(ctx, c.upgrade, &stderr)
 	if err != nil {
 		return "", fmt.Errorf("upgrade cmd %v returned %s: %w", c.upgrade, bytes.TrimSpace(stderr.Bytes()), err)
 	}
 
 	return strings.TrimSpace(string(output)), nil
+}
+
+// ErrCommandTimeout is wrapped in the error returned when a command exceeds
+// the command timeout.
+var ErrCommandTimeout = errors.New("command timed out")
+
+/*
+run executes cmd with the command timeout. If stderr is nil, stdout and stderr
+are combined in the returned output; otherwise only stdout is returned and
+stderr is written to the given buffer.
+*/
+func (c checker) run(ctx context.Context, cmd []string, stderr *bytes.Buffer) ([]byte, error) {
+	ctx, cancel := context.WithTimeoutCause(ctx, c.commandTimeout, ErrCommandTimeout)
+	defer cancel()
+
+	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
+	command.WaitDelay = waitDelay
+
+	var (
+		output []byte
+		err    error
+	)
+
+	if stderr == nil {
+		output, err = command.CombinedOutput()
+	} else {
+		command.Stderr = stderr
+		output, err = command.Output()
+	}
+
+	if err != nil && ctx.Err() != nil {
+		// context.Cause distinguishes our own timeout from a cancellation or
+		// deadline of the caller's context.
+		if cause := context.Cause(ctx); errors.Is(cause, ErrCommandTimeout) {
+			return output, fmt.Errorf("%w after %v: %w", ErrCommandTimeout, c.commandTimeout, err)
+		}
+
+		return output, fmt.Errorf("%w: %w", context.Cause(ctx), err)
+	}
+
+	return output, err
 }
 
 // Upgradable is the wrapper-function for the Upgradable-method.

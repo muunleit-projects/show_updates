@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/muunleit-projects/show_updates/pkg/checkupdates"
 )
 
 func TestBuildErrorMessage(t *testing.T) {
@@ -113,5 +115,74 @@ func TestLoadingFrame(t *testing.T) {
 		if got := loadingFrame(n); got != want {
 			t.Errorf("loadingFrame(%d) = %q, want %q", n, got, want)
 		}
+	}
+}
+
+func TestUpdatesTitle(t *testing.T) {
+	t.Parallel()
+
+	for n, want := range map[int]string{1: "1 update available", 2: "2 updates available", 12: "12 updates available"} {
+		if got := updatesTitle(n); got != want {
+			t.Errorf("updatesTitle(%d) = %q, want %q", n, got, want)
+		}
+	}
+}
+
+func TestRowLabels(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		pkg          checkupdates.Package
+		wantName     string
+		wantVersions string
+	}{
+		{
+			checkupdates.Package{Name: "git", Kind: checkupdates.Formula, InstalledVersions: []string{"2.44.0"}, CurrentVersion: "2.45.1"},
+			"git", "2.44.0 → 2.45.1",
+		},
+		{
+			checkupdates.Package{Name: "firefox", Kind: checkupdates.Cask, InstalledVersions: []string{"125.0"}, CurrentVersion: "126.0"},
+			"firefox (app)", "125.0 → 126.0",
+		},
+		{
+			checkupdates.Package{Name: "node", Kind: checkupdates.Formula, InstalledVersions: []string{"20", "21"}, CurrentVersion: "22", Pinned: true},
+			"node", "20, 21 → 22 (pinned)",
+		},
+		{
+			checkupdates.Package{Name: "x", CurrentVersion: "2"},
+			"x", "→ 2",
+		},
+		{
+			checkupdates.Package{Name: "y", InstalledVersions: []string{"1"}},
+			"y", "1",
+		},
+	} {
+		if got := packageLabel(tt.pkg); got != tt.wantName {
+			t.Errorf("packageLabel = %q, want %q", got, tt.wantName)
+		}
+
+		if got := versionsLabel(tt.pkg); got != tt.wantVersions {
+			t.Errorf("versionsLabel = %q, want %q", got, tt.wantVersions)
+		}
+	}
+}
+
+func TestPinnedHint(t *testing.T) {
+	t.Parallel()
+
+	a := checkupdates.Package{Name: "a"}
+	b := checkupdates.Package{Name: "b", Pinned: true}
+	c := checkupdates.Package{Name: "c", Pinned: true}
+
+	if got := pinnedHint([]checkupdates.Package{a}); got != "" {
+		t.Errorf("expected no hint, got %q", got)
+	}
+
+	if got := pinnedHint([]checkupdates.Package{a, b}); got != "b is pinned and will be skipped by brew upgrade." {
+		t.Errorf("unexpected hint %q", got)
+	}
+
+	if got := pinnedHint([]checkupdates.Package{b, a, c}); got != "b, c are pinned and will be skipped by brew upgrade." {
+		t.Errorf("unexpected hint %q", got)
 	}
 }

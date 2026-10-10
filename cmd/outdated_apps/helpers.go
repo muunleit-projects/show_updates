@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/muunleit-projects/show_updates/pkg/checkupdates"
 )
 
 const (
@@ -97,4 +99,64 @@ func loadingFrame(n int) string {
 	}
 
 	return loadingFrames[n%len(loadingFrames)]
+}
+
+func updatesTitle(n int) string {
+	if n == 1 {
+		return "1 update available"
+	}
+
+	return strconv.Itoa(n) + " updates available"
+}
+
+// packageLabel is the left column of a list row: the name, marked for casks.
+func packageLabel(p checkupdates.Package) string {
+	if p.Kind == checkupdates.Cask {
+		return p.Name + " (app)"
+	}
+
+	return p.Name
+}
+
+// versionsLabel is the right column, e.g. "2.44.0 → 2.45.1".
+func versionsLabel(p checkupdates.Package) string {
+	installed := strings.Join(p.InstalledVersions, ", ")
+
+	var label string
+
+	switch {
+	case installed != "" && p.CurrentVersion != "":
+		label = installed + " → " + p.CurrentVersion
+	case p.CurrentVersion != "":
+		label = "→ " + p.CurrentVersion
+	default:
+		label = installed
+	}
+
+	if p.Pinned {
+		label += " (pinned)"
+	}
+
+	return label
+}
+
+// pinnedHint explains why pinned packages will not be upgraded, or returns
+// "" if none are pinned.
+func pinnedHint(pkgs []checkupdates.Package) string {
+	var pinned []string
+
+	for _, p := range pkgs {
+		if p.Pinned {
+			pinned = append(pinned, p.Name)
+		}
+	}
+
+	switch len(pinned) {
+	case 0:
+		return ""
+	case 1:
+		return pinned[0] + " is pinned and will be skipped by brew upgrade."
+	default:
+		return strings.Join(pinned, ", ") + " are pinned and will be skipped by brew upgrade."
+	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os/exec"
 	"time"
 
@@ -14,7 +15,7 @@ import (
 
 const (
 	appID            string = "com.muunleit.showupdates"
-	minfieldwidth    int    = 240
+	minfieldwidth    int    = 360
 	windowHeight     int    = 320
 	loadingDelay            = 400 * time.Millisecond
 	countdownSeconds int    = 15
@@ -60,7 +61,7 @@ func main() {
 	go animateLoadingDots(loadingDots, stopLoading)
 
 	go func() {
-		upgrades, err := checkupdates.Upgradable()
+		pkgs, err := checkupdates.Outdated(context.Background())
 
 		close(stopLoading)
 
@@ -68,10 +69,10 @@ func main() {
 			switch {
 			case err != nil:
 				showError(err)
-			case upgrades == "":
+			case len(pkgs) == 0:
 				w.SetContent(noUpdates(a))
 			default:
-				w.SetContent(buildUpdatesView(upgrades, openTerminal, a))
+				w.SetContent(buildUpdatesView(pkgs, openTerminal, a))
 			}
 		})
 	}()
@@ -157,24 +158,60 @@ func buildErrorView(message string, a fyne.App) fyne.CanvasObject {
 	)
 }
 
-func buildUpdatesView(upgrades string, openTerminal func(), a fyne.App) fyne.CanvasObject {
-	upgradesLabel := widget.NewLabel(upgrades)
-	upgradesLabel.Wrapping = fyne.TextWrapWord
-	upgradesLabel.Alignment = fyne.TextAlignCenter
+func buildUpdatesView(pkgs []checkupdates.Package, openTerminal func(), a fyne.App) fyne.CanvasObject {
+	list := widget.NewList(
+		func() int { return len(pkgs) },
+		func() fyne.CanvasObject {
+			name := widget.NewLabel("")
+			name.Truncation = fyne.TextTruncateEllipsis
+
+			versions := widget.NewLabel("")
+			versions.Alignment = fyne.TextAlignTrailing
+
+			// Objects order is [center, right] = [name, versions].
+			return container.NewBorder(nil, nil, nil, versions, name)
+		},
+		func(id widget.ListItemID, item fyne.CanvasObject) {
+			p := pkgs[id]
+			row := item.(*fyne.Container)
+			name := row.Objects[0].(*widget.Label)
+			versions := row.Objects[1].(*widget.Label)
+
+			name.SetText(packageLabel(p))
+			versions.SetText(versionsLabel(p))
+
+			if p.Pinned {
+				versions.Importance = widget.WarningImportance
+			} else {
+				versions.Importance = widget.LowImportance
+			}
+
+			versions.Refresh()
+		},
+	)
+
+	bottom := container.NewVBox(
+		widget.NewButton("Open Terminal and Upgrade", openTerminal),
+		widget.NewButton("Quit", func() { a.Quit() }),
+	)
+
+	if hint := pinnedHint(pkgs); hint != "" {
+		hintLabel := widget.NewLabel(hint)
+		hintLabel.Wrapping = fyne.TextWrapWord
+		hintLabel.Importance = widget.LowImportance
+		bottom = container.NewVBox(hintLabel, bottom)
+	}
 
 	return container.NewBorder(
 		widget.NewLabelWithStyle(
-			"Updates available",
+			updatesTitle(len(pkgs)),
 			fyne.TextAlignCenter,
 			fyne.TextStyle{Bold: true},
 		),
-		container.NewVBox(
-			widget.NewButton("Open Terminal and Upgrade", openTerminal),
-			widget.NewButton("Quit", func() { a.Quit() }),
-		),
+		bottom,
 		nil,
 		nil,
-		container.NewVScroll(upgradesLabel),
+		list,
 	)
 }
 

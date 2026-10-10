@@ -2,7 +2,7 @@ module github.com/muunleit-projects/show_updates
 
 go 1.25.0
 
-require fyne.io/fyne/v2 v2.5.5
+require fyne.io/fyne/v2 v2.8.1
 
 require (
 	github.com/go-text/render v0.2.0 // indirect

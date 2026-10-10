@@ -13,12 +13,14 @@ A lightweight macOS helper utility that checks for Homebrew updates and provides
   - Displays list of outdated packages in a clean window.
   - One-click button to trigger update: runs an AppleScript to launch MacOS Terminal and execute `brew upgrade -g -y`.
   - Auto-quits after a 15-second countdown if no updates are found (saving you from closing the window manually).
-  - Error logging to `/tmp/outdated_apps.log` for easy troubleshooting.
+  - Errors are shown in the window and logged to `~/Library/Logs/outdated_apps.log` (also visible in Console.app).
+  - If Terminal cannot be opened (e.g. missing automation permission), the reason is shown instead of the app silently quitting.
 - **CLI Utility (`upgrades_cli`)**: A simple console application that logs the current upgradable packages to the terminal.
 - **Core Library (`checkupdates`)**: A robust, configurable package that handles:
   - A quick connectivity probe to `github.com:443` (3 s by default). It never blocks the check; if `brew update` fails, the probe result is added to the error to make network problems easier to spot.
   - Automatic fallback lookup of standard Homebrew paths (`/opt/homebrew/bin/brew` and `/usr/local/bin/brew`) if `PATH` is limited under GUI execution.
   - Custom command overrides.
+  - A timeout per brew command (10 minutes by default, `WithCommandTimeout`) so a stuck `brew update` cannot hang the app; `UpgradableContext` allows cancellation.
 
 ---
 
@@ -74,7 +76,7 @@ The GUI app is best packaged as a native macOS `.app` bundle using Fyne's packag
 1. Install the Fyne packaging tool if you haven't:
 
    ```bash
-   go install fyne.io/fyne/v2/cmd/fyne@latest
+   go install fyne.io/tools/cmd/fyne@latest
    ```
 
 2. Package the app from the repository root (the GUI's `main` package lives in `cmd/outdated_apps`, so `--src` is required):
@@ -113,6 +115,7 @@ import (
 // Create a custom checker
 checker, err := checkupdates.NewChecker(
     checkupdates.WithConnectionTimeout(10 * time.Second),
+    checkupdates.WithCommandTimeout(5 * time.Minute),
     checkupdates.WithUpdate("/usr/local/bin/brew", "update"),
 )
 ```

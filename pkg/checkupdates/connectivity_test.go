@@ -1,6 +1,7 @@
 package checkupdates_test
 
 import (
+	"context"
 	"errors"
 	"net"
 	"strings"
@@ -18,7 +19,7 @@ func failingDial(calls *atomic.Int32) func(string, string, time.Duration) (net.C
 	}
 }
 
-func TestUpgradableProceedsWhenConnectivityCheckFails(t *testing.T) {
+func TestOutdatedProceedsWhenConnectivityCheckFails(t *testing.T) {
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -26,7 +27,7 @@ func TestUpgradableProceedsWhenConnectivityCheckFails(t *testing.T) {
 	c, err := checkupdates.NewChecker(
 		checkupdates.WithDialTimeoutFunc(failingDial(&calls)),
 		checkupdates.WithUpdate("echo", "update"),
-		checkupdates.WithUpgradeable("echo", "upgrade"),
+		checkupdates.WithOutdated(printEmpty...),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error creating checker: %v", err)
@@ -34,13 +35,13 @@ func TestUpgradableProceedsWhenConnectivityCheckFails(t *testing.T) {
 
 	start := time.Now()
 
-	out, err := c.Upgradable()
+	pkgs, err := c.Outdated(context.Background())
 	if err != nil {
-		t.Fatalf("expected Upgradable to continue after connectivity failure, got error: %v", err)
+		t.Fatalf("expected Outdated to continue after connectivity failure, got error: %v", err)
 	}
 
-	if out != "upgrade" {
-		t.Fatalf("expected upgrade output, got %q", out)
+	if len(pkgs) != 0 {
+		t.Fatalf("expected no packages, got %v", pkgs)
 	}
 
 	// The probe must not retry in a loop and block the user.
@@ -49,11 +50,11 @@ func TestUpgradableProceedsWhenConnectivityCheckFails(t *testing.T) {
 	}
 
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
-		t.Errorf("Upgradable took %v after a failed probe, expected it to continue right away", elapsed)
+		t.Errorf("Outdated took %v after a failed probe, expected it to continue right away", elapsed)
 	}
 }
 
-func TestUpgradableReportsConnectivityWhenUpdateFails(t *testing.T) {
+func TestOutdatedReportsConnectivityWhenUpdateFails(t *testing.T) {
 	t.Parallel()
 
 	var calls atomic.Int32
@@ -61,13 +62,13 @@ func TestUpgradableReportsConnectivityWhenUpdateFails(t *testing.T) {
 	c, err := checkupdates.NewChecker(
 		checkupdates.WithDialTimeoutFunc(failingDial(&calls)),
 		checkupdates.WithUpdate("false"),
-		checkupdates.WithUpgradeable("echo", "never"),
+		checkupdates.WithOutdated(printEmpty...),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error creating checker: %v", err)
 	}
 
-	_, err = c.Upgradable()
+	_, err = c.Outdated(context.Background())
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -96,13 +97,13 @@ func TestConnectivityProbeArguments(t *testing.T) {
 			return client, nil
 		}),
 		checkupdates.WithUpdate("true"),
-		checkupdates.WithUpgradeable("echo", "ok"),
+		checkupdates.WithOutdated(printEmpty...),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error creating checker: %v", err)
 	}
 
-	if _, err := c.Upgradable(); err != nil {
+	if _, err := c.Outdated(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -124,13 +125,13 @@ func TestWithConnectedTrueSkipsProbe(t *testing.T) {
 		checkupdates.WithConnectedTrue(),
 		checkupdates.WithDialTimeoutFunc(failingDial(&calls)),
 		checkupdates.WithUpdate("true"),
-		checkupdates.WithUpgradeable("true"),
+		checkupdates.WithOutdated(printEmpty...),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error creating checker: %v", err)
 	}
 
-	if _, err := c.Upgradable(); err != nil {
+	if _, err := c.Outdated(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

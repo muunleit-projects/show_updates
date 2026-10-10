@@ -1,6 +1,8 @@
 package checkupdates_test
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -9,57 +11,63 @@ import (
 
 // None of these tests need Homebrew: both commands are always overridden.
 
-func TestUpgradable(t *testing.T) {
+const emptyJSON = `{"formulae":[],"casks":[]}`
+
+// printEmpty is an outdated command that reports no updates.
+var printEmpty = []string{"echo", emptyJSON}
+
+func TestOutdated(t *testing.T) {
 	t.Parallel()
 
 	for _, tt := range []struct {
-		desc       string
-		updateCmd  []string
-		upgradeCmd []string
-		want       string
-		wantErr    string
+		desc        string
+		updateCmd   []string
+		outdatedCmd []string
+		wantNames   []string
+		wantErr     string
+		wantErrIs   error
 	}{
 		{
-			desc:       "reads package list from file",
-			updateCmd:  []string{"true"},
-			upgradeCmd: []string{"cat", "testfiles/three_dogs.txt"},
-			want:       "waldi\nbello\nrex",
+			desc:        "reads packages from brew JSON",
+			updateCmd:   []string{"true"},
+			outdatedCmd: []string{"cat", "testfiles/outdated.json"},
+			wantNames:   []string{"git", "node", "firefox", "visual-studio-code"},
 		},
 		{
-			desc:       "trims surrounding whitespace",
-			updateCmd:  []string{"true"},
-			upgradeCmd: []string{"echo", "  mock_upgrade  "},
-			want:       "mock_upgrade",
+			desc:        "no updates",
+			updateCmd:   []string{"true"},
+			outdatedCmd: []string{"cat", "testfiles/empty.json"},
+			wantNames:   []string{},
 		},
 		{
-			desc:       "empty output means no updates",
-			updateCmd:  []string{"true"},
-			upgradeCmd: []string{"true"},
-			want:       "",
+			desc:        "stderr warnings do not break parsing",
+			updateCmd:   []string{"true"},
+			outdatedCmd: []string{"sh", "-c", "echo 'Warning: something' >&2; echo '" + emptyJSON + "'"},
+			wantNames:   []string{},
 		},
 		{
-			desc:       "stderr warnings are not part of the package list",
-			updateCmd:  []string{"true"},
-			upgradeCmd: []string{"sh", "-c", "echo 'Warning: something' >&2; echo pkg"},
-			want:       "pkg",
+			desc:        "non-JSON output is an error, not 'no updates'",
+			updateCmd:   []string{"true"},
+			outdatedCmd: []string{"echo", "waldi"},
+			wantErrIs:   cu.ErrUnexpectedOutput,
 		},
 		{
-			desc:       "failing update command",
-			updateCmd:  []string{"sh", "-c", "echo update broke >&2; exit 1"},
-			upgradeCmd: []string{"echo", "never"},
-			wantErr:    "update broke",
+			desc:        "failing update command",
+			updateCmd:   []string{"sh", "-c", "echo update broke >&2; exit 1"},
+			outdatedCmd: printEmpty,
+			wantErr:     "update broke",
 		},
 		{
-			desc:       "failing upgrade command reports stderr",
-			updateCmd:  []string{"true"},
-			upgradeCmd: []string{"sh", "-c", "echo outdated broke >&2; exit 1"},
-			wantErr:    "outdated broke",
+			desc:        "failing outdated command reports stderr",
+			updateCmd:   []string{"true"},
+			outdatedCmd: []string{"sh", "-c", "echo outdated broke >&2; exit 1"},
+			wantErr:     "outdated broke",
 		},
 		{
-			desc:       "missing executable",
-			updateCmd:  []string{"this-command-does-not-exist-42"},
-			upgradeCmd: []string{"true"},
-			wantErr:    "this-command-does-not-exist-42",
+			desc:        "missing executable",
+			updateCmd:   []string{"this-command-does-not-exist-42"},
+			outdatedCmd: printEmpty,
+			wantErr:     "this-command-does-not-exist-42",
 		},
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
@@ -68,21 +76,25 @@ func TestUpgradable(t *testing.T) {
 			c, err := cu.NewChecker(
 				cu.WithConnectedTrue(),
 				cu.WithUpdate(tt.updateCmd...),
-				cu.WithUpgradeable(tt.upgradeCmd...),
+				cu.WithOutdated(tt.outdatedCmd...),
 			)
 			if err != nil {
 				t.Fatalf("NewChecker: unexpected error: %v", err)
 			}
 
-			got, err := c.Upgradable()
+			pkgs, err := c.Outdated(context.Background())
 
-			if tt.wantErr != "" {
+			if tt.wantErr != "" || tt.wantErrIs != nil {
 				if err == nil {
-					t.Fatalf("expected error containing %q, got nil (output %q)", tt.wantErr, got)
+					t.Fatalf("expected error, got nil (packages %v)", pkgs)
 				}
 
-				if !strings.Contains(err.Error(), tt.wantErr) {
+				if tt.wantErr != "" && !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("error %q does not contain %q", err, tt.wantErr)
+				}
+
+				if tt.wantErrIs != nil && !errors.Is(err, tt.wantErrIs) {
+					t.Fatalf("error %q is not %v", err, tt.wantErrIs)
 				}
 
 				return
@@ -92,10 +104,36 @@ func TestUpgradable(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
+			names := make([]string, len(pkgs))
+			for i, p := range pkgs {
+				names[i] = p.Name
+			}
+
+			if strings.Join(names, ",") != strings.Join(tt.wantNames, ",") {
+				t.Errorf("got %v, want %v", names, tt.wantNames)
 			}
 		})
+	}
+}
+
+func TestOutdatedPackageFunc(t *testing.T) {
+	t.Parallel()
+
+	pkgs, err := cu.Outdated(context.Background(),
+		cu.WithConnectedTrue(),
+		cu.WithUpdate("true"),
+		cu.WithOutdated("cat", "testfiles/outdated.json"),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(pkgs) != 4 {
+		t.Errorf("got %d packages, want 4", len(pkgs))
+	}
+
+	if _, err := cu.Outdated(context.Background(), cu.WithUpdate("")); err == nil {
+		t.Error("expected option error to be returned")
 	}
 }
 
@@ -104,72 +142,23 @@ func TestNewCheckerInvalidOptions(t *testing.T) {
 
 	for _, tt := range []struct {
 		desc    string
-		opt     func() error
+		opts    []cu.Option
 		wantErr string
 	}{
-		{
-			desc:    "empty update command",
-			wantErr: "empty update command",
-			opt: func() error {
-				_, err := cu.NewChecker(cu.WithUpdate(""), cu.WithUpgradeable("true"))
-				return err
-			},
-		},
-		{
-			desc:    "no update command at all",
-			wantErr: "empty update command",
-			opt: func() error {
-				_, err := cu.NewChecker(cu.WithUpdate(), cu.WithUpgradeable("true"))
-				return err
-			},
-		},
-		{
-			desc:    "empty upgradeable command",
-			wantErr: "empty upgradeable command",
-			opt: func() error {
-				_, err := cu.NewChecker(cu.WithUpdate("true"), cu.WithUpgradeable(""))
-				return err
-			},
-		},
-		{
-			desc:    "no upgradeable command at all",
-			wantErr: "empty upgradeable command",
-			opt: func() error {
-				_, err := cu.NewChecker(cu.WithUpdate("true"), cu.WithUpgradeable())
-				return err
-			},
-		},
-		{
-			desc:    "negative connection timeout",
-			wantErr: "timeout",
-			opt: func() error {
-				_, err := cu.NewChecker(cu.WithConnectionTimeout(-1))
-				return err
-			},
-		},
-		{
-			desc:    "zero connection timeout",
-			wantErr: "timeout",
-			opt: func() error {
-				_, err := cu.NewChecker(cu.WithConnectionTimeout(0))
-				return err
-			},
-		},
-		{
-			desc:    "nil dial function",
-			wantErr: "dial function",
-			opt: func() error {
-				_, err := cu.NewChecker(cu.WithDialTimeoutFunc(nil))
-				return err
-			},
-		},
+		{"empty update command", []cu.Option{cu.WithUpdate(""), cu.WithOutdated("true")}, "empty update command"},
+		{"no update command at all", []cu.Option{cu.WithUpdate(), cu.WithOutdated("true")}, "empty update command"},
+		{"empty outdated command", []cu.Option{cu.WithUpdate("true"), cu.WithOutdated("")}, "empty outdated command"},
+		{"no outdated command at all", []cu.Option{cu.WithUpdate("true"), cu.WithOutdated()}, "empty outdated command"},
+		{"negative connection timeout", []cu.Option{cu.WithConnectionTimeout(-1)}, "timeout"},
+		{"zero connection timeout", []cu.Option{cu.WithConnectionTimeout(0)}, "timeout"},
+		{"nil dial function", []cu.Option{cu.WithDialTimeoutFunc(nil)}, "dial function"},
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
 			t.Parallel()
 
 			// Must not panic, and the error must come from the option itself,
 			// not from a missing brew installation.
-			err := tt.opt()
+			_, err := cu.NewChecker(tt.opts...)
 			if err == nil {
 				t.Fatal("expected error, got nil")
 			}

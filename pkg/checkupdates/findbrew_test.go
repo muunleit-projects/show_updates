@@ -2,6 +2,7 @@ package checkupdates
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -61,20 +62,20 @@ func TestNewCheckerSkipsBrewLookupWhenBothCommandsSet(t *testing.T) {
 	t.Parallel()
 
 	// Works on machines without Homebrew because no lookup is needed.
-	c, err := NewChecker(WithUpdate("true"), WithUpgradeable("true"))
+	c, err := NewChecker(WithUpdate("true"), WithOutdated("true"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if c.update[0] != "true" || c.upgrade[0] != "true" {
-		t.Errorf("commands were overwritten: update=%v upgrade=%v", c.update, c.upgrade)
+	if c.update[0] != "true" || c.outdated[0] != "true" {
+		t.Errorf("commands were overwritten: update=%v outdated=%v", c.update, c.outdated)
 	}
 }
 
 func TestNewCheckerDefaultsUseBrew(t *testing.T) {
 	t.Parallel()
 
-	c, err := NewChecker(WithUpgradeable("true"))
+	c, err := NewChecker(WithOutdated("true"))
 	if errors.Is(err, ErrBrewNotFound) {
 		t.Skip("Homebrew not installed on this machine")
 	}
@@ -87,11 +88,20 @@ func TestNewCheckerDefaultsUseBrew(t *testing.T) {
 		t.Errorf("default update command = %v, want [<brew> update]", c.update)
 	}
 
-	if c.upgrade[0] != "true" {
-		t.Errorf("custom upgrade command was overwritten: %v", c.upgrade)
+	if c.outdated[0] != "true" {
+		t.Errorf("custom outdated command was overwritten: %v", c.outdated)
 	}
 
-	if c.connectionTimeout != timeoutTime {
-		t.Errorf("default timeout = %v, want %v", c.connectionTimeout, timeoutTime)
+	if c.connectionTimeout != defaultConnectionTimeout {
+		t.Errorf("default timeout = %v, want %v", c.connectionTimeout, defaultConnectionTimeout)
+	}
+
+	c, err = NewChecker(WithUpdate("true"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := strings.Join(c.outdated[1:], " "); got != "outdated --json=v2 --greedy" {
+		t.Errorf("default outdated command = %v, want [<brew> outdated --json=v2 --greedy]", c.outdated)
 	}
 }

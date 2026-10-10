@@ -1,3 +1,13 @@
+/*
+Package checkupdates refreshes Homebrew and reports outdated formulae and casks.
+
+	pkgs, err := checkupdates.Outdated(ctx)
+
+or, with options:
+
+	c, err := checkupdates.NewChecker(checkupdates.WithCommandTimeout(5 * time.Minute))
+	pkgs, err := c.Outdated(ctx)
+*/
 package checkupdates
 
 import (
@@ -8,35 +18,28 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 )
 
-/*
-	basics
-*/
-
-type checker struct {
+// Checker runs `brew update` followed by `brew outdated`. Create one with
+// NewChecker; the zero value is not usable.
+type Checker struct {
 	update            []string
-	upgrade           []string
+	outdated          []string
 	connected         bool
 	connectionTimeout time.Duration
 	commandTimeout    time.Duration
 	dialTimeout       func(network, address string, timeout time.Duration) (net.Conn, error)
 }
 
-type (
-	options func(c *checker) error
-)
-
-/*
-	Setting up new checkers
-*/
+// Option configures a Checker.
+type Option func(c *Checker) error
 
 const (
-	// timeoutTime is the default time for the connectivity probe. The probe is
-	// only used to enrich error messages, so it must stay short.
-	timeoutTime = 3 * time.Second
+	// defaultConnectionTimeout is the default time for the connectivity
+	// probe. The probe is only used to enrich error messages, so it must
+	// stay short.
+	defaultConnectionTimeout = 3 * time.Second
 
 	// probeAddress is the host Homebrew talks to (over HTTPS).
 	probeAddress = "github.com:443"
@@ -51,56 +54,61 @@ const (
 	waitDelay = 5 * time.Second
 )
 
-// ErrBrewNotFound is returned when no brew executable can be located and no
-// custom commands were provided.
-var ErrBrewNotFound = errors.New("brew not found in PATH or standard locations")
+var (
+	// ErrBrewNotFound is returned when no brew executable can be located and
+	// no custom commands were provided.
+	ErrBrewNotFound = errors.New("brew not found in PATH or standard locations")
+
+	// ErrCommandTimeout is wrapped in the error returned when a command
+	// exceeds the command timeout.
+	ErrCommandTimeout = errors.New("command timed out")
+)
 
 // commonBrewPaths are checked when brew is not in PATH, since PATH is often
 // limited for GUI apps launched from Finder or at login.
 var commonBrewPaths = []string{"/opt/homebrew/bin/brew", "/usr/local/bin/brew"}
 
 /*
-NewChecker returns a new checker.
+NewChecker returns a new Checker.
 
 By default the values are
 update command: "<brew> update"
-upgrade command: "<brew> outdated -g"
+outdated command: "<brew> outdated --json=v2 --greedy"
 connection timeout: 3 seconds
 command timeout: 10 minutes per command
 connection check: enabled.
 
 The brew executable is only looked up if at least one of the commands was not
-set via WithUpdate or WithUpgradeable.
+set via WithUpdate or WithOutdated.
 */
-func NewChecker(opts ...options) (checker, error) {
-	c := checker{
-		connectionTimeout: timeoutTime,
+func NewChecker(opts ...Option) (Checker, error) {
+	c := Checker{
+		connectionTimeout: defaultConnectionTimeout,
 		commandTimeout:    defaultCommandTimeout,
-		connected:         false,
 		dialTimeout:       net.DialTimeout,
 	}
 
 	for _, opt := range opts {
 		if err := opt(&c); err != nil {
-			return checker{}, fmt.Errorf("error in option: %w", err)
+			return Checker{}, fmt.Errorf("error in option: %w", err)
 		}
 	}
 
-	if c.update != nil && c.upgrade != nil {
+	if c.update != nil && c.outdated != nil {
 		return c, nil
 	}
 
 	brewPath, err := findBrew(exec.LookPath, fileExists)
 	if err != nil {
-		return checker{}, err
+		return Checker{}, err
 	}
 
 	if c.update == nil {
 		c.update = []string{brewPath, "update"}
 	}
 
-	if c.upgrade == nil {
-		c.upgrade = []string{brewPath, "outdated", "-g"}
+	if c.outdated == nil {
+		c.outdated = []string{brewPath, "outdated", "--json=v2", "--greedy"}
 	}
 
 	return c, nil
@@ -128,9 +136,9 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// WithConnectedTrue disables the connectivity check, primarily for tests.
-func WithConnectedTrue() options {
-	return func(c *checker) error {
+// WithConnectedTrue disables the connectivity probe, primarily for tests.
+func WithConnectedTrue() Option {
+	return func(c *Checker) error {
 		c.connected = true
 
 		return nil
@@ -138,8 +146,8 @@ func WithConnectedTrue() options {
 }
 
 // WithUpdate sets the command used for the update step.
-func WithUpdate(cmd ...string) options {
-	return func(c *checker) error {
+func WithUpdate(cmd ...string) Option {
+	return func(c *Checker) error {
 		if len(cmd) == 0 || cmd[0] == "" {
 			return errors.New("empty update command")
 		}
@@ -150,22 +158,23 @@ func WithUpdate(cmd ...string) options {
 	}
 }
 
-// WithUpgradeable sets the command used to detect upgradable packages.
-func WithUpgradeable(cmd ...string) options {
-	return func(c *checker) error {
+// WithOutdated sets the command that lists outdated packages. It must print
+// the same JSON as `brew outdated --json=v2`.
+func WithOutdated(cmd ...string) Option {
+	return func(c *Checker) error {
 		if len(cmd) == 0 || cmd[0] == "" {
-			return errors.New("empty upgradeable command")
+			return errors.New("empty outdated command")
 		}
 
-		c.upgrade = cmd
+		c.outdated = cmd
 
 		return nil
 	}
 }
 
 // WithConnectionTimeout sets the maximum time the checker should spend probing GitHub.
-func WithConnectionTimeout(t time.Duration) options {
-	return func(c *checker) error {
+func WithConnectionTimeout(t time.Duration) Option {
+	return func(c *Checker) error {
 		if t <= 0 {
 			return errors.New("timeout should be greater than 0")
 		}
@@ -177,9 +186,9 @@ func WithConnectionTimeout(t time.Duration) options {
 }
 
 // WithCommandTimeout sets the maximum run time of each command (update and
-// upgradeable check). The command is killed when the timeout is exceeded.
-func WithCommandTimeout(t time.Duration) options {
-	return func(c *checker) error {
+// outdated). The command is killed when the timeout is exceeded.
+func WithCommandTimeout(t time.Duration) Option {
+	return func(c *Checker) error {
 		if t <= 0 {
 			return errors.New("command timeout should be greater than 0")
 		}
@@ -191,8 +200,8 @@ func WithCommandTimeout(t time.Duration) options {
 }
 
 // WithDialTimeoutFunc overrides the dialer used for connectivity probes.
-func WithDialTimeoutFunc(dial func(network, address string, timeout time.Duration) (net.Conn, error)) options {
-	return func(c *checker) error {
+func WithDialTimeoutFunc(dial func(network, address string, timeout time.Duration) (net.Conn, error)) Option {
+	return func(c *Checker) error {
 		if dial == nil {
 			return errors.New("dial function should not be nil")
 		}
@@ -204,25 +213,17 @@ func WithDialTimeoutFunc(dial func(network, address string, timeout time.Duratio
 }
 
 /*
-	Methods and Functions
-*/
-
-/*
-Upgradable refreshes the package list and returns the upgradable packages.
+Outdated refreshes Homebrew and returns the outdated packages, formulae first,
+then casks, each sorted by name. An empty slice means everything is up to date.
 
 A failed connectivity probe does not abort the check, because Homebrew may
 still work through a proxy, mirror or local network setup. If the update step
 fails afterwards, the probe error is attached to make the cause easier to spot.
 
-Each command is killed after the command timeout (see WithCommandTimeout).
+Each command is killed after the command timeout (see WithCommandTimeout) or
+when ctx is cancelled.
 */
-func (c checker) Upgradable() (string, error) {
-	return c.UpgradableContext(context.Background())
-}
-
-// UpgradableContext is like Upgradable, but stops the running command when
-// ctx is cancelled.
-func (c checker) UpgradableContext(ctx context.Context) (string, error) {
+func (c Checker) Outdated(ctx context.Context) ([]Package, error) {
 	var connErr error
 	if !c.connected {
 		connErr = c.connectivity()
@@ -235,30 +236,41 @@ func (c checker) UpgradableContext(ctx context.Context) (string, error) {
 			err = errors.Join(err, fmt.Errorf("connectivity check failed: %w", connErr))
 		}
 
-		return "", err
+		return nil, err
 	}
 
-	// Only stdout holds the package list; stderr may carry brew warnings.
+	// Only stdout holds the JSON; stderr may carry brew warnings.
 	var stderr bytes.Buffer
 
-	output, err = c.run(ctx, c.upgrade, &stderr)
+	output, err = c.run(ctx, c.outdated, &stderr)
 	if err != nil {
-		return "", fmt.Errorf("upgrade cmd %v returned %s: %w", c.upgrade, bytes.TrimSpace(stderr.Bytes()), err)
+		return nil, fmt.Errorf("outdated cmd %v returned %s: %w", c.outdated, bytes.TrimSpace(stderr.Bytes()), err)
 	}
 
-	return strings.TrimSpace(string(output)), nil
+	pkgs, err := ParseOutdatedJSON(output)
+	if err != nil {
+		return nil, fmt.Errorf("outdated cmd %v: %w", c.outdated, err)
+	}
+
+	return pkgs, nil
 }
 
-// ErrCommandTimeout is wrapped in the error returned when a command exceeds
-// the command timeout.
-var ErrCommandTimeout = errors.New("command timed out")
+// Outdated creates a Checker with the given options and calls its Outdated method.
+func Outdated(ctx context.Context, opts ...Option) ([]Package, error) {
+	c, err := NewChecker(opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Outdated(ctx)
+}
 
 /*
 run executes cmd with the command timeout. If stderr is nil, stdout and stderr
 are combined in the returned output; otherwise only stdout is returned and
 stderr is written to the given buffer.
 */
-func (c checker) run(ctx context.Context, cmd []string, stderr *bytes.Buffer) ([]byte, error) {
+func (c Checker) run(ctx context.Context, cmd []string, stderr *bytes.Buffer) ([]byte, error) {
 	ctx, cancel := context.WithTimeoutCause(ctx, c.commandTimeout, ErrCommandTimeout)
 	defer cancel()
 
@@ -290,18 +302,8 @@ func (c checker) run(ctx context.Context, cmd []string, stderr *bytes.Buffer) ([
 	return output, err
 }
 
-// Upgradable is the wrapper-function for the Upgradable-method.
-func Upgradable() (string, error) {
-	c, err := NewChecker()
-	if err != nil {
-		return "", err
-	}
-
-	return c.Upgradable()
-}
-
 /* connectivity probes the connection to GitHub once. */
-func (c checker) connectivity() error {
+func (c Checker) connectivity() error {
 	con, err := c.dialTimeout("tcp", probeAddress, c.connectionTimeout)
 	if err != nil {
 		return err

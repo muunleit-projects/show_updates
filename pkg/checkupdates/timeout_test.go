@@ -10,14 +10,14 @@ import (
 	cu "github.com/muunleit-projects/show_updates/pkg/checkupdates"
 )
 
-func TestUpgradableKillsHangingUpdate(t *testing.T) {
+func TestOutdatedKillsHangingUpdate(t *testing.T) {
 	t.Parallel()
 
 	c, err := cu.NewChecker(
 		cu.WithConnectedTrue(),
 		cu.WithCommandTimeout(200*time.Millisecond),
 		cu.WithUpdate("sleep", "30"),
-		cu.WithUpgradeable("echo", "never"),
+		cu.WithOutdated(printEmpty...),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error creating checker: %v", err)
@@ -25,7 +25,7 @@ func TestUpgradableKillsHangingUpdate(t *testing.T) {
 
 	start := time.Now()
 
-	_, err = c.Upgradable()
+	_, err = c.Outdated(context.Background())
 	if !errors.Is(err, cu.ErrCommandTimeout) {
 		t.Fatalf("expected ErrCommandTimeout, got: %v", err)
 	}
@@ -39,31 +39,31 @@ func TestUpgradableKillsHangingUpdate(t *testing.T) {
 	}
 }
 
-func TestUpgradableKillsHangingUpgradeCheck(t *testing.T) {
+func TestOutdatedKillsHangingOutdatedCheck(t *testing.T) {
 	t.Parallel()
 
 	c, err := cu.NewChecker(
 		cu.WithConnectedTrue(),
 		cu.WithCommandTimeout(200*time.Millisecond),
 		cu.WithUpdate("true"),
-		cu.WithUpgradeable("sleep", "30"),
+		cu.WithOutdated("sleep", "30"),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error creating checker: %v", err)
 	}
 
-	if _, err := c.Upgradable(); !errors.Is(err, cu.ErrCommandTimeout) {
+	if _, err := c.Outdated(context.Background()); !errors.Is(err, cu.ErrCommandTimeout) {
 		t.Fatalf("expected ErrCommandTimeout, got: %v", err)
 	}
 }
 
-func TestUpgradableContextCancel(t *testing.T) {
+func TestOutdatedContextCancel(t *testing.T) {
 	t.Parallel()
 
 	c, err := cu.NewChecker(
 		cu.WithConnectedTrue(),
 		cu.WithUpdate("sleep", "30"),
-		cu.WithUpgradeable("echo", "never"),
+		cu.WithOutdated(printEmpty...),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error creating checker: %v", err)
@@ -74,7 +74,7 @@ func TestUpgradableContextCancel(t *testing.T) {
 
 	start := time.Now()
 
-	_, err = c.UpgradableContext(ctx)
+	_, err = c.Outdated(ctx)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestWithCommandTimeoutRejectsNonPositive(t *testing.T) {
 	t.Parallel()
 
 	for _, d := range []time.Duration{0, -time.Second} {
-		_, err := cu.NewChecker(cu.WithCommandTimeout(d), cu.WithUpdate("true"), cu.WithUpgradeable("true"))
+		_, err := cu.NewChecker(cu.WithCommandTimeout(d), cu.WithUpdate("true"), cu.WithOutdated(printEmpty...))
 		if err == nil || !strings.Contains(err.Error(), "command timeout") {
 			t.Errorf("WithCommandTimeout(%v): expected error, got %v", d, err)
 		}

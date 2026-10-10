@@ -1,5 +1,7 @@
 # Show Updates (Homebrew Update Helper)
 
+[![CI](https://github.com/muunleit-projects/show_updates/actions/workflows/ci.yml/badge.svg)](https://github.com/muunleit-projects/show_updates/actions/workflows/ci.yml)
+
 A lightweight macOS helper utility that checks for Homebrew updates and provides a friendly interface to upgrade outdated packages. The project offers a Go API, a graphical user interface (GUI) built with [Fyne](https://fyne.io/), and a simple command-line interface (CLI).
 
 ---
@@ -14,7 +16,7 @@ A lightweight macOS helper utility that checks for Homebrew updates and provides
   - Error logging to `/tmp/outdated_apps.log` for easy troubleshooting.
 - **CLI Utility (`upgrades_cli`)**: A simple console application that logs the current upgradable packages to the terminal.
 - **Core Library (`checkupdates`)**: A robust, configurable package that handles:
-  - Verification of active internet connection (pings `github.com` with custom timeouts) before attempting Brew updates.
+  - A quick connectivity probe to `github.com:443` (3 s by default). It never blocks the check; if `brew update` fails, the probe result is added to the error to make network problems easier to spot.
   - Automatic fallback lookup of standard Homebrew paths (`/opt/homebrew/bin/brew` and `/usr/local/bin/brew`) if `PATH` is limited under GUI execution.
   - Custom command overrides.
 
@@ -75,11 +77,26 @@ The GUI app is best packaged as a native macOS `.app` bundle using Fyne's packag
    go install fyne.io/fyne/v2/cmd/fyne@latest
    ```
 
-2. Package the app:
+2. Package the app from the repository root (the GUI's `main` package lives in `cmd/outdated_apps`, so `--src` is required):
    ```bash
-   fyne package -appID=com.muunleit.showupdates -appVersion=$(date +"%Y.%m.%d")
+   fyne package -os darwin \
+     -src ./cmd/outdated_apps \
+     -icon Icon.png \
+     -name "Outdated Apps" \
+     -appID com.muunleit.showupdates \
+     -appVersion "$(date +'%Y.%m.%d')"
    ```
-   This will generate a `show_updates.app` bundle in your current directory, which you can move to your `/Applications` folder or set up to run automatically at login.
+   `-icon` is resolved relative to `-src`. Flag names differ slightly between versions of the fyne tool; check `fyne package --help` if one is rejected.
+
+   This generates an `Outdated Apps.app` bundle, which you can move to your `/Applications` folder or set up to run automatically at login.
+
+### Testing
+
+```bash
+go test ./...
+```
+
+The tests for `pkg/checkupdates` override the brew commands and run without Homebrew installed (e.g. on Linux CI).
 
 ---
 

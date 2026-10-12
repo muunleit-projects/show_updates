@@ -58,7 +58,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, outdated 
 	}
 
 	if flags.NArg() > 0 {
-		fmt.Fprintf(stderr, "unexpected arguments: %v\n", flags.Args())
+		_, _ = fmt.Fprintf(stderr, "unexpected arguments: %v\n", flags.Args())
 		flags.Usage()
 
 		return exitUsage
@@ -66,12 +66,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, outdated 
 
 	pkgs, err := outdated(ctx, checkupdates.WithCommandTimeout(*timeout))
 	if err != nil {
-		fmt.Fprintf(stderr, "error checking for updates: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "error checking for updates: %v\n", err)
 		return exitError
 	}
 
 	if err := printPackages(stdout, stderr, pkgs, *asJSON); err != nil {
-		fmt.Fprintf(stderr, "error writing output: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "error writing output: %v\n", err)
 		return exitError
 	}
 

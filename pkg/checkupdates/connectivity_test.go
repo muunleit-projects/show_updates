@@ -92,7 +92,7 @@ func TestConnectivityProbeArguments(t *testing.T) {
 		checkupdates.WithDialTimeoutFunc(func(network, address string, timeout time.Duration) (net.Conn, error) {
 			gotNetwork, gotAddress, gotTimeout = network, address, timeout
 			client, server := net.Pipe()
-			server.Close()
+			_ = server.Close()
 
 			return client, nil
 		}),

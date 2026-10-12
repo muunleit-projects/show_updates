@@ -10,7 +10,7 @@ A lightweight macOS helper utility that checks for Homebrew updates and provides
 
 - **Automatic Check & List**: Automatically runs `brew update` and retrieves the list of outdated packages.
 - **GUI Helper (`outdated_apps`)**:
-  - Lists outdated formulae and casks with installed and new version, e.g. `git  2.44.0 → 2.45.1`; casks are marked "(app)".
+  - Lists outdated formulae and casks with installed and new version, e.g. `git  2.44.0 -> 2.45.1`; casks are marked "(app)".
   - Pinned packages are highlighted, with a note that `brew upgrade` will skip them.
   - One-click button to trigger update: runs an AppleScript to launch MacOS Terminal and execute `brew upgrade -g -y`.
   - Auto-quits after a 15-second countdown if no updates are found (saving you from closing the window manually).
@@ -29,15 +29,22 @@ A lightweight macOS helper utility that checks for Homebrew updates and provides
 ## Directory Structure
 
 ```text
+├── .github/workflows/
+│   └── ci.yml             # CI: macOS tests, Linux tests (no Homebrew), lint
 ├── cmd/
 │   ├── outdated_apps/     # Graphical user interface application (Fyne)
 │   │   ├── main.go        # GUI logic and AppleScript launcher
+│   │   ├── helpers.go     # Labels and texts for the list (versions, titles, hints)
+│   │   ├── main_test.go   # Tests for the GUI helpers
 │   │   └── Icon.png       # Application icon
 │   └── upgrades_cli/      # Command-line interface application
-│       └── main.go        # Basic CLI printing outdated packages
+│       ├── main.go        # CLI printing outdated packages (plain, JSON, exit code)
+│       └── main_test.go   # Tests for the CLI
 ├── pkg/
 │   └── checkupdates/      # Core API package
 │       ├── checkupdates.go # Check logic, path-finding, and connectivity checks
+│       ├── packages.go     # Package type and parsing of `brew outdated --json=v2`
+│       ├── testfiles/      # JSON samples used by the tests
 │       └── *_test.go       # Tests for checker logic
 ├── LICENSE                # MIT License
 ├── README.md              # Project documentation
@@ -100,10 +107,22 @@ The GUI app is best packaged as a native macOS `.app` bundle using Fyne's packag
 ### Testing
 
 ```bash
-go test ./...
+go vet ./...
+go test -race ./...
 ```
 
-The tests for `pkg/checkupdates` override the brew commands and run without Homebrew installed (e.g. on Linux CI).
+The tests for `pkg/checkupdates` override the brew commands and run without Homebrew installed (e.g. on Linux CI). Only `TestNewCheckerDefaultsUseBrew` calls the real `brew` and is skipped when Homebrew is missing.
+
+### Continuous Integration
+
+On every push and pull request, GitHub Actions runs three jobs: tests on macOS, tests on Linux (without Homebrew) and [golangci-lint](https://golangci-lint.run/). To check the lint rules locally:
+
+```bash
+brew install golangci-lint
+golangci-lint run ./...
+```
+
+The linter reports unchecked error return values (`errcheck`). Where an error is deliberately ignored, say so explicitly, e.g. `_, _ = fmt.Fprintf(stderr, ...)`.
 
 ---
 

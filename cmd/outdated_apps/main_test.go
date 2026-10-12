@@ -138,19 +138,19 @@ func TestRowLabels(t *testing.T) {
 	}{
 		{
 			checkupdates.Package{Name: "git", Kind: checkupdates.Formula, InstalledVersions: []string{"2.44.0"}, CurrentVersion: "2.45.1"},
-			"git", "2.44.0 → 2.45.1",
+			"git", "2.44.0 -> 2.45.1",
 		},
 		{
 			checkupdates.Package{Name: "firefox", Kind: checkupdates.Cask, InstalledVersions: []string{"125.0"}, CurrentVersion: "126.0"},
-			"firefox (app)", "125.0 → 126.0",
+			"firefox (app)", "125.0 -> 126.0",
 		},
 		{
 			checkupdates.Package{Name: "node", Kind: checkupdates.Formula, InstalledVersions: []string{"20", "21"}, CurrentVersion: "22", Pinned: true},
-			"node", "20, 21 → 22 (pinned)",
+			"node", "20, 21 -> 22 (pinned)",
 		},
 		{
 			checkupdates.Package{Name: "x", CurrentVersion: "2"},
-			"x", "→ 2",
+			"x", "-> 2",
 		},
 		{
 			checkupdates.Package{Name: "y", InstalledVersions: []string{"1"}},

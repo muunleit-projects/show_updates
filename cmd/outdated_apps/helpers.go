@@ -118,7 +118,7 @@ func packageLabel(p checkupdates.Package) string {
 	return p.Name
 }
 
-// versionsLabel is the right column, e.g. "2.44.0 → 2.45.1".
+// versionsLabel is the right column, e.g. "2.44.0 -> 2.45.1".
 func versionsLabel(p checkupdates.Package) string {
 	installed := strings.Join(p.InstalledVersions, ", ")
 
@@ -126,9 +126,9 @@ func versionsLabel(p checkupdates.Package) string {
 
 	switch {
 	case installed != "" && p.CurrentVersion != "":
-		label = installed + " → " + p.CurrentVersion
+		label = installed + " -> " + p.CurrentVersion
 	case p.CurrentVersion != "":
-		label = "→ " + p.CurrentVersion
+		label = "-> " + p.CurrentVersion
 	default:
 		label = installed
 	}
